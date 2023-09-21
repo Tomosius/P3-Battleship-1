@@ -39,10 +39,10 @@ battleshipFleet = {
 will create list of colors, so i can use them on map.
 """
 colors = {
-    "LIGHT_GRAY": "\033[37m",    # Light Gray - single cell ship
+    "DARK_YELLOW": "\033[33m",   # Dark Yellow - single cell ship
+    "LIGHT_GRAY": "\033[37m",    # Light Gray - empty space on map,. n o need to shoot
     "DARK_BLUE": "\033[34m",     # Dark Blue - horizontal ships
     "DARK_GREEN": "\033[32m",    # Dark Green - vertical ships
-    "DARK_YELLOW": "\033[33m",   # Dark Yellow - empty space, no need shooting
     "DARK_RED": "\033[31m",      # Dark Red - damaged ship
     "RESET": "\033[0m"           # Reset color to default
 }
@@ -90,16 +90,10 @@ mapPlayer = [[0 for j in range(Y)] for i in range(X)]
 Print the CPU MAP array to the console - will create function, later will be easier to print the map
 """
 def printMap(printMap):
-    column_width = [max(len(str(item)) for item in column) for column in zip(*printMap)] # calculating maximum width of column through all map
-    for column, width in zip(printMap[0], column_width): # printing table headers
-        print(f"{column:{width}}", end=" | ") # aligning all columns as text using f-string
-    print() # printing new line to separate headers from data
-    for row in printMap[1:]: #printing table data
-        for item, width in zip(row, column_width):
-            # Format and align each data item in the row using f-strings
-            # The width specifier ensures that the column has a minimum width of 'width'
-            print(f"{item:{width}}", end=" | ")
-        print()  # Print a newline to separate rows
+    for row in printMap:
+        for item in row:
+            print(item, end="")
+        print()  
 
 
 """
@@ -158,7 +152,7 @@ def shipDeploy(map, shipLength, location, symbol):
     row, column = location  # getting row and column numbers
     
     if shipLength == 1: # if ship ius made just of one cell, then we will show only:
-        color = colors["LIGHT_GRAY"]
+        color = colors["DARK_YELLOW"]
         map[row][column] = color +  chr(0x25C6) + colors["RESET"]# ship will be displayed as ◆
     else:
         if symbol == "H": 
