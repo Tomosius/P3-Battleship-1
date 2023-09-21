@@ -35,7 +35,17 @@ battleshipFleet = {
     }
 }
 
-
+"""
+will create list of colors, so i can use them on map.
+"""
+colors = {
+    "LIGHT_GRAY": "\033[37m",    # Light Gray - single cell ship
+    "DARK_BLUE": "\033[34m",     # Dark Blue - horizontal ships
+    "DARK_GREEN": "\033[32m",    # Dark Green - vertical ships
+    "DARK_YELLOW": "\033[33m",   # Dark Yellow - empty space, no need shooting
+    "DARK_RED": "\033[31m",      # Dark Red - damaged ship
+    "RESET": "\033[0m"           # Reset color to default
+}
 """
 section for imports of libraries
 """
@@ -100,9 +110,6 @@ def mapFlip(mapRotate):
 
 
 
-printMap(mapCPU) # printing out map to see how it looks empty
-
-
 """
 creating loop for all battleships, starting name and then going to sublevel - QTY of each of them
 """
@@ -118,15 +125,12 @@ def deployAllShips():
             symbol = 'V' if align == 'vertical' else 'H'
             mapSearch = mapFlip(mapCPU) if align == 'vertical' else mapCPU
             location = findShipLocation(mapSearch, size, 0)
-            print (f"Deploying {i} {shipName}(s) out of {quantity} of size {size} in location {location}")
             if location is not None:
                 shipDeploy(mapSearch, size, location, symbol)
                 mapCPU = mapFlip(mapSearch) if align == 'vertical' else mapSearch
             else:
                 print(f"Error: Cannot deploy {shipName}. No valid location found.")
             mapCPU = mapFlip(mapSearch) if align == 'vertical' else mapSearch
-            printMap(mapCPU)
-            print()
 
 
 """
@@ -148,20 +152,24 @@ def findShipLocation(searchMap, shipLength, cellValue):
 
 
 """
-function to deploy ship to map by given location
+function to deploy ship to map by given location, and ships will be displayed as symbols not letters, so it is easier to see where is what ship, is it vertical or horizontal and etc.
 """
 def shipDeploy(map, shipLength, location, symbol):
     row, column = location  # getting row and column numbers
+    
     if shipLength == 1: # if ship ius made just of one cell, then we will show only:
-        map[row][column] = chr(0x25C6) # ship will be displayed as ◆
+        color = colors["LIGHT_GRAY"]
+        map[row][column] = color +  chr(0x25C6) + colors["RESET"]# ship will be displayed as ◆
     else:
         if symbol == "H": 
-            map[row][column] = chr(0x25C0) # if ship is horizontal, first cell will be ◂
+            color = colors["DARK_BLUE"]
+            map[row][column] = color + chr(0x25C0) + colors["RESET"]# if ship is horizontal, first cell will be ◂
         else:
-            map[row][column] = chr(0x25B2) # if ship is vertical, first cell will be ▲
+            color = colors["DARK_GREEN"]
+            map[row][column] = color + chr(0x25B2) + colors["RESET"]# if ship is vertical, first cell will be ▲
         column = column + 1
         for i in range(shipLength - 1):  # looping through given location
-            map[row][column + i] = chr(0x25A0)  # deploying ship all remaining cells as ■
+            map[row][column + i] = color + chr(0x25A0)  + colors["RESET"]# deploying ship all remaining cells as ■
 
 deployAllShips()
 printMap(mapCPU)
