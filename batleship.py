@@ -8,7 +8,7 @@ gameResult = None
 """
 default Battleship fleet - i use as dictionary, so in case if player changes map size or ships quantities, it will be easier to play
 """
-battleshipFleet = {
+battleShipFleetDefault = {
     "Aircraft Carrier": {
         "Size": 5,
         "Quantity": 1,
@@ -72,11 +72,16 @@ colors = {
 will create ship patterns how they will be displayed
 """
 shipSymbols = {
-    "Single": [colors["DARK_YELLOW"] + chr(0x25C6) + colors["RESET"]], # ship will be displayed as ◆ in DARK_YELOW
-    "Horizontal": [[colors["DARK_BLUE"] + chr(0x25C0) + colors["RESET"]],[colors["DARK_BLUE"] + chr(0x25A4) + colors["RESET"]]], # ship will be displayed as ◂▤▤▤ in DARK_BLUE
-    "Vertical": [[colors["DARK_GREEN"] + chr(0x25B2) + colors["RESET"]],[colors["DARK_GREEN"] + chr(0x25A5) + colors["RESET"]]], # ship will be displayed as ▲ and below it ▥
-    "Hit": [colors["DARK_RED"] + chr(0x25A6) + colors["RESET"]], # if hit, will mark as ▦ in DARK_RED color
-    "Miss": [colors["LIGHT_GRAY"] + chr(0x2022) + colors["RESET"]] # if miss, will mark as • in LIGHT_GRAY
+    "Single": [colors["DARK_YELLOW"] + chr(0x25C6) + colors["RESET"]],  # ship will be displayed as ◆ in DARK_YELOW
+    "Horizontal": [[colors["DARK_BLUE"] + chr(0x25C0) + colors["RESET"]], [colors["DARK_BLUE"] + chr(0x25A4) + colors["RESET"]]],
+    # ship will be displayed as ◂▤▤▤ in DARK_BLUE
+    "Vertical": [[colors["DARK_GREEN"] + chr(0x25B2) + colors["RESET"]], [colors["DARK_GREEN"] + chr(0x25A5) + colors["RESET"]]],  # ship will be displayed as ▲ and below it ▥ in DARK_GREEN
+    "Hit": [colors["DARK_RED"] + chr(0x25A6) + colors["RESET"]],  # if hit, will mark as ▦ in DARK_RED color
+    "Miss": [colors["LIGHT_GRAY"] + chr(0x2022) + colors["RESET"]],  # if miss, will mark as • in LIGHT_GRAY
+    "SingleSunk": [colors["DARK_RED"] + chr(0x25C6) + colors["RESET"]],  # ship will be displayed as ◆ in DARK_RED
+    "HorizontalSunk": [[colors["DARK_RED"] + chr(0x25C0) + colors["RESET"]], [colors["DARK_RED"] + chr(0x25A4) + colors["RESET"]]],
+    # ship will be displayed as ◂▤▤▤ in DARK_RED
+    "VerticalSunk": [[colors["DARK_RED"] + chr(0x25B2) + colors["RESET"]], [colors["DARK_RED"] + chr(0x25A5) + colors["RESET"]]],  # ship will be displayed as ▲ and below it ▥ in DARK_RED
 }
 
 """
@@ -85,34 +90,177 @@ section for imports of libraries
 import curses # want to implement mouse activity for game, not just terminal, but this for future, depends how project will go
 import random # i believe this import is self explaining
 import copy # will use it to copy default fleet to CPU and player, where coordinates and etc can be stored for future use
-fleetCPU = copy.deepcopy(battleshipFleet) # making copy of fleet for CPU
-fleetPlayer = copy.deepcopy(battleshipFleet) # making copy of fleet for Player
+fleetCPU = copy.deepcopy(battleShipFleetDefault) # making copy of fleet for CPU
+fleetPlayer = copy.deepcopy(battleShipFleetDefault) # making copy of fleet for Player
 
-
-"""
-Function for player to change map size
-"""
-def mapSizeSelect(): #function for user to input map size
-    global mapX, mapY
-    while True:
-        # user will be requested to input map size
-        mapSize = input("Please select MAP size You would like to play. First number - Width, second number - Height. Example: 10,10 \n")
-        try: #testing if user used correct pattern to input map size
-            mapX,mapY = mapSize.split(',') # splitting user input into 2 separate parts 
-            if mapX.isdigit() and mapY.isdigit(): # checking if both inputs parts are numbers
-                mapSize = [int(mapX), int(mapY)] #if both inputs are valid, assigning them to mapSize
-                break #now function can stop as all is correct
-            else:  #if any part of inout is not numeric, printing out message
-                print("Invalid input. Please enter two numbers separated by a comma.")
-        except ValueError: #if user input can not be split in 2 parts will raise an issue:
-            print("Invalid input. Please enter two numbers separated by a comma.")
-    return mapX,mapY
 
 """
 creating an array that will be representing map based on X and Y
 """
 mapCPU = [[0 for c in range(mapY)] for r in range(mapX)]
 mapPlayer = [[0 for j in range(mapY)] for i in range(mapX)]
+
+
+"""
+function to adjust game settings
+"""
+def gameAdjust():
+    global battleShipFleetDefault
+    while True:  # Continue looping until the player chooses to finish (choice 4)
+        changes = input("If you would like to adjust game settings, like map or Battle Ships Fleet, please enter Y (or enter 4 to finish): \n")
+        try:
+            changes = changes.capitalize()
+            if changes == "Y" or changes == "YES":
+                print("Be game Default settings, Map is 10 by 10 \n")
+                print("Current game fleet is:")
+                printFleet(battleShipFleetDefault)
+                print("\nOptions:")
+                print("1. Modify Game Map")
+                print("2. Modify existing ship")
+                print("3. Add new ship")
+                print("4. Finish")
+                choice = input("Enter your choice (1/2/3/4): ")
+                if choice.isdigit():
+                    choice = int(choice)  # Convert to integer
+                    if choice == 1:
+                        mapSizeSelect()
+                    elif choice == 2:
+                        modifyShip(battleShipFleetDefault)
+                    elif choice == 3:
+                        addNewShip(battleShipFleetDefault)
+                    elif choice == 4:
+                        break  # Exit the loop when the player chooses to finish
+                    else:
+                        print("Invalid choice. Please select a valid option.")
+                else:
+                    print("Invalid input. Please enter a valid choice (1/2/3/4).")
+        except KeyboardInterrupt:
+            print("Game adjustment interrupted.")
+
+
+"""
+Function for player to change map size
+"""
+def mapSizeSelect():
+    global mapX, mapY, mapCPU, mapPlayer
+    while True:
+        mapSize = input("Please select MAP size You would like to play. First number - Width, second number - Height. Example: 10,10 \n")
+        try:
+            mapX, mapY = mapSize.split(',')
+            if mapX.isdigit() and mapY.isdigit():
+                mapX, mapY = int(mapX), int(mapY)
+                print(f"The game You will play will be {mapX} wide and {mapY} high")
+                break
+            else:
+                print("Invalid input. Please enter two numbers separated by a comma.")
+        except ValueError:
+            print("Invalid input. Please enter two numbers separated by a comma.")
+    mapCPU = [[0 for _ in range(mapY)] for _ in range(mapX)]
+    mapPlayer = [[0 for _ in range(mapY)] for _ in range(mapX)]
+
+
+"""
+function to modify existing ships in fleet
+"""
+def modifyShip(fleet):
+    sorted_fleet = dict(sorted(fleet.items(), key=lambda item: item[1]["Size"]))
+    printFleet(sorted_fleet)
+    shipChoice = input("Enter the ship name or index to modify: ")
+    
+    if shipChoice.isdigit():
+        shipIndex = int(shipChoice)
+        if 1 <= shipIndex <= len(sorted_fleet):
+            shipName = list(sorted_fleet.keys())[shipIndex - 1]
+            if shipName in fleet:
+                while True:
+                    size_input = input(f"Enter the new size of the '{shipName}' ship: ")
+                    if size_input.isdigit():
+                        size = int(size_input)
+                        break
+                    else:
+                        print("Invalid input. Please enter a valid size as a positive integer.")
+                while True:
+                    quantity_input = input(f"Enter the new quantity of the '{shipName}' ship: ")
+                    if quantity_input.isdigit():
+                        quantity = int(quantity_input)
+                        break
+                    else:
+                        print("Invalid input. Please enter a valid quantity as a non-negative integer.")
+                fleet[shipName]["Size"] = size
+                fleet[shipName]["Quantity"] = quantity
+            else:
+                print(f"The ship '{shipName}' does not exist in the fleet.")
+        else:
+            print("Invalid index. Please enter a valid index.")
+    else:
+        shipName = shipChoice
+        if shipName in fleet:
+            while True:
+                size_input = input(f"Enter the new size of the '{shipName}' ship: ")
+                if size_input.isdigit():
+                    size = int(size_input)
+                    break
+                else:
+                    print("Invalid input. Please enter a valid size as a positive integer.")
+            while True:
+                quantity_input = input(f"Enter the new quantity of the '{shipName}' ship: ")
+                if quantity_input.isdigit():
+                    quantity = int(quantity_input)
+                    break
+                else:
+                    print("Invalid input. Please enter a valid quantity as a non-negative integer.")
+            fleet[shipName]["Size"] = size
+            fleet[shipName]["Quantity"] = quantity
+            fleet[shipName]["Coordinates"] = []
+            fleet = dict(sorted(fleet.items(), key=lambda item: item[1]["Size"]))
+        else:
+            print(f"The ship '{shipName}' does not exist in the fleet.")
+
+"""
+function to add new ships to fleet
+"""
+def addNewShip(fleet):
+    ship_name = input("Enter the name of the new ship: ")
+    while True:
+        size_input = input("Enter the size of the new ship: ")
+        if size_input.isdigit():
+            size = int(size_input)
+            break
+        else:
+            print("Invalid input. Please enter a valid size as a positive integer.")
+    while True:
+        quantity_input = input("Enter the quantity of the new ship: ")
+        if quantity_input.isdigit():
+            quantity = int(quantity_input)
+            break
+        else:
+            print("Invalid input. Please enter a valid quantity as a non-negative integer.")
+    coordinates = []
+    for i in range(size):
+        coord = input(f"Enter coordinates for part {i + 1} of the ship (e.g., 'A3'): ").strip().upper()
+        coordinates.append([ord(coord[0]) - ord('A'), int(coord[1:]) - 1])
+    fleet[ship_name] = {
+        "Size": size,
+        "Quantity": quantity,
+        "Coordinates": coordinates
+    }
+    fleet = dict(sorted(fleet.items(), key=lambda item: item[1]["Size"]))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 """
@@ -130,12 +278,6 @@ def printMap(map):
         for value in row:
             print(f"{value}  ", end="")
         print() 
-
-"""
-function to create ship or pattern by given width and length, will be hande searching map
-"""
-def createPattern(width, height):
-    return [[0] * width for _ in range(height)]
 
 """
 function to search map by given pattern
@@ -181,8 +323,8 @@ def deploySingleShip(map, length, location, alignment, ship, fleet):
 function to deploy CPU ships
 """
 def cpuDeployAllShips():
-    global fleetCPU, battleshipFleet, mapCPU
-    fleetCPU = copy.deepcopy(battleshipFleet) # making fresh copy, in case there were any changes made for map size or fleet
+    global fleetCPU, battleShipFleetDefault, mapCPU
+    fleetCPU = copy.deepcopy(battleShipFleetDefault) # making fresh copy, in case there were any changes made for map size or fleet
     for shipName, shipInfo in fleetCPU.items():
         quantity = shipInfo["Quantity"]
         size = shipInfo["Size"]
@@ -214,12 +356,13 @@ def playerSingleShipDeploy():
             print("Invalid input. Please enter coordinates, alignment, and ship size. All information MUST be separated by commas.")
 
 
+
 """
 function to deploy all layer ships
 """
 def playerDeployAllShips():
-    global fleetPlayer, battleshipFleet, mapPlayer
-    fleetPlayer = copy.deepcopy(battleshipFleet)
+    global fleetPlayer, battleShipFleetDefault, mapPlayer
+    fleetPlayer = copy.deepcopy(battleShipFleetDefault)
     for shipName, shipInfo in fleetPlayer.items():
         quantity = shipInfo["Quantity"]
         size = shipInfo["Size"]
@@ -391,6 +534,7 @@ function to start new game
 def newGame():
     global gameResult, fleetPlayer, fleetCPU, mapCPU, mapPlayer
     move = random.choice("player", "CPU") # random choice who will make first move, player or computer
+
     while gameResult != None:
         if move == "player":
             coordX,coordY = playerShoot()
