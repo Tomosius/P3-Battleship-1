@@ -11,40 +11,50 @@ default Battleship fleet - i use as dictionary, so in case if player changes map
 battleshipFleet = {
     "Aircraft Carrier": {
         "Size": 5,
-        "Quantity": 1
+        "Quantity": 1,
+        "Coordinates": []
     },
     "Battleship": {
         "Size": 4,
-        "Quantity": 0
+        "Quantity": 0,
+        "Coordinates": []
     },
     "Cruiser": {
         "Size": 3,
-        "Quantity": 0
+        "Quantity": 0,
+        "Coordinates": []
     },
     "Submarine": {
         "Size": 3,
-        "Quantity": 0
+        "Quantity": 0,
+        "Coordinates": []
     },
     "Destroyer": {
         "Size": 2,
-        "Quantity": 0
+        "Quantity": 0,
+        "Coordinates": []
     },
     "Dingy Boat": {
         "Size": 1,
-        "Quantity": 0
+        "Quantity": 0,
+        "Coordinates": []
     }
 }
+
 
 """
 function to print out all fleet as a table
 """
-def printFleet():
-    print("{:<20} {:<10} {:<10}".format("Ship Type", "Size", "Quantity"))
+def printFleet(fleet):
+    print("{:<20} {:<10} {:<10} {:<50}".format("Ship Type", "Size", "Quantity", "Coordinates"))
     print("="*40)
-    for ship, details in battleshipFleet.items():
+    for ship, details in fleet.items():
         size = details["Size"]
         quantity = details["Quantity"]
-        print("{:<20} {:<10} {:<10}".format(ship, size, quantity)) 
+        coordinates = details["Coordinates"]
+        coordinates_str = str(coordinates)  # Convert the list to a string
+        print("{:<20} {:<10} {:<10} {:<50}".format(ship, size, quantity, coordinates_str))
+
 """
 will create list of colors, so i can use them on map.
 """
@@ -62,9 +72,9 @@ section for imports of libraries
 """
 import curses # want to implement mouse activity for game, not just terminal, but this for future, depends how project will go
 import random # i believe this import is self explaining
-import re
-
-
+import copy # will use it to copy default fleet to CPU and player, where coordinates and etc can be stored for future use
+fleetCPU = copy.deepcopy(battleshipFleet) # making copy of fleet for CPU
+fleetPlayer = copy.deepcopy(battleshipFleet) # making copy of fleet for Player
 """
 Function for player to change map size
 """
@@ -129,9 +139,10 @@ def searchMap(map, width, height):
 """
 function to deploy single ship on specified map
 """
-def deploySingleShip(map,length,location,alignment):
+def deploySingleShip(map,length,location,alignment,ship,fleet):
     row, column = location  # getting row and column numbers
     print(location)
+    fleet[ship]["Coordinates"].append(location)
     if length == 1: # if ship ius made just of one cell, then we will show only:
         color = colors["DARK_YELLOW"]
         map[row][column] = color +  chr(0x25C6) + colors["RESET"]# ship will be displayed as ◆
@@ -152,19 +163,22 @@ def deploySingleShip(map,length,location,alignment):
 """
 function to deploy CPU ships
 """
-def cpuDeployAllShips(map,fleet):
-    for shipName, shipInfo in fleet.items():
+def cpuDeployAllShips():
+    global fleetCPU, battleshipFleet, mapCPU
+    fleetCPU = copy.deepcopy(battleshipFleet) # making fresh copy, in case there were any changes made for map size or fleet
+    for shipName, shipInfo in fleetCPU.items():
         quantity = shipInfo["Quantity"]
         size = shipInfo["Size"]
         print(f"Deploying {quantity} {shipName}(s) of size {size}")
         for i in range(quantity):
             symbol = random.choice(["H", "V"]) # horizontal or vertical
             if symbol == "H":
-                location = random.choice(searchMap(map, size, 1))
+                location = random.choice(searchMap(mapCPU, size, 1))
             elif symbol == "V":
-                location = random.choice(searchMap(map, 1, size))
-            deploySingleShip(map,size,location,symbol)
-    return map
+                location = random.choice(searchMap(mapCPU, 1, size))
+            deploySingleShip(mapCPU, size, location, symbol, shipName, fleetCPU)
+    return mapCPU
+
 
 
 """
@@ -186,23 +200,25 @@ def playerSingleShipDeploy():
 """
 function to deploy all layer ships
 """
-def playerDeployAllShips(map,fleet):
-    for shipName, shipInfo in fleet.items():
+def playerDeployAllShips():
+    global fleetPlayer, battleshipFleet, mapPlayer
+    fleetPlayer = copy.deepcopy(battleshipFleet)
+    for shipName, shipInfo in fleetPlayer.items():
         quantity = shipInfo["Quantity"]
         size = shipInfo["Size"]
         for i in range(quantity):
             print(f"Deploying {i+1} {shipName}(s) out of {quantity} of size {size}")
-            mapX, mapY, alignment= playerSingleShipDeploy()
+            mapX, mapY, alignment = playerSingleShipDeploy()
             location = (mapX, mapY)
-            deploySingleShip(map,size,location,alignment)
-    return map
+            deploySingleShip(mapPlayer, size, location, alignment, shipName, fleetPlayer)
+    return mapPlayer
 
 
-printFleet()
-cpuDeployAllShips(mapCPU, battleshipFleet)
+
+cpuDeployAllShips()
 printMap(mapCPU)
+printFleet(fleetCPU)
 print()
-playerDeployAllShips(mapPlayer, battleshipFleet)
+playerDeployAllShips()
 printMap(mapPlayer)
-
 
