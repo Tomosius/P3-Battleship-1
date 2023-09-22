@@ -58,7 +58,6 @@ def printFleet(fleet):
 """
 will create list of colors, so i can use them on map.
 """
-
 colors = {
     "DARK_YELLOW": "\033[33m",   # Dark Yellow - single cell ship
     "LIGHT_GRAY": "\033[37m",    # Light Gray - empty space on map,. n o need to shoot
@@ -67,6 +66,17 @@ colors = {
     "DARK_RED": "\033[31m",      # Dark Red - damaged ship
     "RESET": "\033[0m"           # Reset color to default
 }
+
+
+"""
+will create ship patterns how they will be displayed
+"""
+shipSymbols = {
+    "single": [colors["DARK_YELLOW"] + chr(0x25C6) + colors["RESET"]], # ship will be displayed as ◆ in DARK_YELOW
+    "Horizontal": [[colors["DARK_BLUE"] + chr(0x25C0) + colors["RESET"]],[colors["DARK_BLUE"] + chr(0x25A4) + colors["RESET"]]], # ship will be displayed as ◂▤▤▤ in DARK_BLUE
+    "Vertical": [[colors["DARK_GREEN"] + chr(0x25B2) + colors["RESET"]],[colors["DARK_GREEN"] + chr(0x25A5) + colors["RESET"]]] # ship will be displayed as ▲ and below it ▥
+}
+
 """
 section for imports of libraries
 """
@@ -75,6 +85,8 @@ import random # i believe this import is self explaining
 import copy # will use it to copy default fleet to CPU and player, where coordinates and etc can be stored for future use
 fleetCPU = copy.deepcopy(battleshipFleet) # making copy of fleet for CPU
 fleetPlayer = copy.deepcopy(battleshipFleet) # making copy of fleet for Player
+
+
 """
 Function for player to change map size
 """
@@ -124,7 +136,7 @@ def createPattern(width, height):
     return [[0] * width for _ in range(height)]
 
 """
-function to search map by givven pattern
+function to search map by given pattern
 """
 def searchMap(map, width, height):
     coordinatesList = []
@@ -133,30 +145,33 @@ def searchMap(map, width, height):
             subgrid = [row[j:j + width] for row in map[i:i + height]]
             if all(cell == 0 for row in subgrid for cell in row):
                 coordinatesList.append((i, j))
+    if not coordinatesList: # Check if no coordinates were fuound, so coordinatesList is empty
+        return 'noneFound'
     return coordinatesList
 
 
-"""
-function to deploy single ship on specified map
-"""
-def deploySingleShip(map,length,location,alignment,ship,fleet):
+def deploySingleShip(map, length, location, alignment, ship, fleet):
+    global shipSymbols
     row, column = location  # getting row and column numbers
     print(location)
-    fleet[ship]["Coordinates"].append(location)
-    if length == 1: # if ship ius made just of one cell, then we will show only:
-        color = colors["DARK_YELLOW"]
-        map[row][column] = color +  chr(0x25C6) + colors["RESET"]# ship will be displayed as ◆
-    else: #if ship is or longer then 2 cells:
+    shipCoordinates = []  # this will be coordinates appended to fleet
+    if length == 1:  # if ship is made just of one cell, then we will show only:
+        map[row][column] = shipSymbols["single"][0]
+        shipCoordinates.append([row, column])
+    else:  # if ship is or longer then 2 cells:
         if alignment == "H":
-            color = colors["DARK_BLUE"]
-            map[row][column] = color + chr(0x25C0) + colors["RESET"]# if ship is horizontal, first cell will be ◂
+            map[row][column] = shipSymbols["Horizontal"][0][0]
+            shipCoordinates.append([row, column])
             for i in range(length - 1):
-                map[row][column + i + 1] = color + chr(0x25A0)  + colors["RESET"]# deploying ship all remaining cells as ■
+                map[row][column + i + 1] = shipSymbols["Horizontal"][1][0]
+                shipCoordinates.append([row, column + i + 1])
         else:
-            color = colors["DARK_GREEN"]
-            map[row][column] = color + chr(0x25B2) + colors["RESET"]# if ship is horizontal, first cell will be ▲
+            map[row][column] = shipSymbols["Vertical"][0][0]
+            shipCoordinates.append([row, column])
             for i in range(length - 1):
-                map[row + i + 1][column] = color + chr(0x25A0)  + colors["RESET"]# deploying ship all remaining cells as ■
+                map[row + i + 1][column] = shipSymbols["Vertical"][1][0]
+                shipCoordinates.append([row + i + 1, column])
+    fleet[ship]["Coordinates"].append(shipCoordinates)
     return map
 
 
@@ -180,7 +195,6 @@ def cpuDeployAllShips():
     return mapCPU
 
 
-
 """
 function to deploy player single
 """
@@ -196,6 +210,7 @@ def playerSingleShipDeploy():
                 print("Invalid input, please check you have entered values and information correctly")
         except ValueError:
             print("Invalid input. Please enter coordinates, alignment, and ship size. All information MUST be separated by commas.")
+
 
 """
 function to deploy all layer ships
@@ -214,7 +229,6 @@ def playerDeployAllShips():
     return mapPlayer
 
 
-
 cpuDeployAllShips()
 printMap(mapCPU)
 printFleet(fleetCPU)
@@ -222,3 +236,5 @@ print()
 playerDeployAllShips()
 printMap(mapPlayer)
 
+
+                

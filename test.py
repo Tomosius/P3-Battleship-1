@@ -1,86 +1,78 @@
-import curses
 
-# Define color pairs for curses
-COLOR_PAIR_DARK_YELLOW = 1
-COLOR_PAIR_LIGHT_GRAY = 2
-COLOR_PAIR_DARK_BLUE = 3
-COLOR_PAIR_DARK_GREEN = 4
-COLOR_PAIR_DARK_RED = 5
+"""
+function to find biggest ship not sunk in Players fleet
+"""
+def findBiggestShipInPlayerFleet():
+    global fleetPlayer # importing global variable
+    biggestShipName = None
+    biggestShipSize = 0
+    for ship, details in fleetPlayer.items(): # cycling thorough all ships in players fleet
+        size = details["Size"] # getting size info
+        quantity = details["Quantity"] # getting quontity information
+        if quantity > 0 and size > biggestShipSize: # Check if the quantity of the ship is above zero and if its size is greater than the current biggest ship size
+            biggestShipName = ship
+            biggestShipSize = size
+    return biggestShipName, biggestShipSize
 
-# Initialize curses
-stdscr = curses.initscr()
-curses.start_color()
-curses.init_pair(COLOR_PAIR_DARK_YELLOW, curses.COLOR_YELLOW, curses.COLOR_BLACK)
-curses.init_pair(COLOR_PAIR_LIGHT_GRAY, curses.COLOR_WHITE, curses.COLOR_BLACK)
-curses.init_pair(COLOR_PAIR_DARK_BLUE, curses.COLOR_BLUE, curses.COLOR_BLACK)
-curses.init_pair(COLOR_PAIR_DARK_GREEN, curses.COLOR_GREEN, curses.COLOR_BLACK)
-curses.init_pair(COLOR_PAIR_DARK_RED, curses.COLOR_RED, curses.COLOR_BLACK)
 
-# Define color codes for formatting
-colors = {
-    "DARK_YELLOW": curses.color_pair(COLOR_PAIR_DARK_YELLOW),
-    "LIGHT_GRAY": curses.color_pair(COLOR_PAIR_LIGHT_GRAY),
-    "DARK_BLUE": curses.color_pair(COLOR_PAIR_DARK_BLUE),
-    "DARK_GREEN": curses.color_pair(COLOR_PAIR_DARK_GREEN),
-    "DARK_RED": curses.color_pair(COLOR_PAIR_DARK_RED),
-    "RESET": curses.color_pair(0)  # Reset to default colors
-}
-
-# Your existing code for map rendering functions can remain mostly unchanged.
-
-# Modify your deploySingleShip function to use curses color codes
-def deploySingleShip(map, length, location, alignment):
-    row, column = location
-    if length == 1:
-        color = colors["DARK_YELLOW"]
-        map[row][column] = (chr(0x25C6), color)  # Store character and color pair
-    else:
-        if alignment == "H":
-            color = colors["DARK_BLUE"]
-            map[row][column] = (chr(0x25C0), color)
-            for i in range(length - 1):
-                map[row][column + i + 1] = (chr(0x25A0), color)
+"""
+now will search for given ship on Players
+"""
+def searchForPlayerShipAndHit():
+    global mapPlayer, fleetPlayer
+    shipName, shipSize = findBiggestShipInPlayerFleet()
+    width = shipSize * 2 - 1
+    height = shipSize * 2 -1
+    while coordinates == "noneFound" : # creating loop, if there was no such big pattern found on map for deployed ship, will start making it smaller and keep searching for it till we find one pattern
+        coordinates = searchMap(mapPlayer,width,height) # looking for given ship, so we will make huge square, 2x size of ship and will look for that on map
+        orientation = random.choice("width", "height") # choosing how we will reduce searching block, horizontaly or verticaly
+        if orientation == "width":
+            width = width - 1 # reducing width
+            coordinates = searchMap(mapPlayer,width,height) #searching with lest wide pattern
+            if coordinates == "noneFound":
+                break #if there was no pattern found, now we will swap to height and search again, so we use break to keep searching
         else:
-            color = colors["DARK_GREEN"]
-            map[row][column] = (chr(0x25B2), color)
-            for i in range(length - 1):
-                map[row + i + 1][column] = (chr(0x25A0), color)
+            height = height - 1 # reducing height
+            width = width + 1 # making width same again, as now will search with lower height
+            coordinates = searchMap(mapPlayer,width,height) # searching again
+            if coordinates == "noneFound":
+                break # we have found again nothing, so breaking 
+        width = width - 1
+        height = height - 1
+    #now we have found coordinates list
+    shootingCoordinates = random.choice(coordinates) # choosing random spot to shoot
+    coordinatesX, coordinatesY = shootingCoordinates.split(',') # getting X and Y where we will be shooting
+    #now we have X, Y, ship width, we will select center of that area if possible
+    coordinatesX = coordinatesX // 2 + 1 - (random.choice([0, 1]) if coordinatesX % 2 == 1 else 0) # now choosing middle of X coordinates, but with random choice, as if X = 5, then it would be 3, but if X = 6, then it can be 3 or 4
+    coordinatesY = coordinatesY // 2 + 1 - (random.choice([0, 1]) if coordinatesY % 2 == 1 else 0) # now choosing middle of X coordinates, but with random choice, as if X = 5, then it would be 3, but if X = 6, then it can be 3 or 4
+    
 
-# Your printMap function can also be adapted to use curses color codes
-def printMap(table):
-    stdscr.addstr("   ")
-    for col_index in range(len(table[0])):
-        stdscr.addstr(f"{col_index}  ")
-    stdscr.addstr("\n   " + "=" * (len(table[0]) * 3) + "\n")
+    
 
-    for row_index, row in enumerate(table):
-        stdscr.addstr(f"{row_index} | ")
-        for value, color in row:
-            stdscr.addstr(value, color)
-            stdscr.addstr("  ")
-        stdscr.addstr("\n")
+"""
+function to check if shooting hit ship or not
+"""
+def shootCheck(coordX, coordY, map, fleet):
+    checkCoordinates = [coordX,coordY]
+    for shipData in fleet.values():
+        for coordinatesAlships in shipData["Coordinates"]:
+            if checkCoordinates not in coordinatesAlships:
+                map[coordX][coordY] = colors["LIGHT_GRAY"] + chr(0x2022) + colors["RESET"] # marking spot as gray dot as shooting was a miss
+            
+                
 
-# Example usage of your functions with curses
-def main(stdscr):
-    # Initialize colors and maps
-    curses.start_color()
-    curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLACK)
-    curses.init_pair(2, curses.COLOR_BLUE, curses.COLOR_BLACK)
-    curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)
-    mapCPU = [[(" ", curses.color_pair(1))] * 10 for _ in range(10)]
-    mapPlayer = [[(" ", curses.color_pair(1))] * 10 for _ in range(10)]
 
-    # Deploy ships (modify as needed)
-    deploySingleShip(mapCPU, 5, (0, 0), "H")
-    deploySingleShip(mapPlayer, 4, (1, 1), "V")
 
-    # Print maps
-    stdscr.clear()
-    stdscr.addstr("CPU Map:\n")
-    printMap(mapCPU)
-    stdscr.addstr("\nPlayer Map:\n")
-    printMap(mapPlayer)
-    stdscr.refresh()
-    stdscr.getch()
 
-curses.wrapper(main)
+
+
+
+
+
+
+
+
+
+
+
+
