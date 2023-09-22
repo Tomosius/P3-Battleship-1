@@ -247,22 +247,6 @@ def addNewShip(fleet):
     fleet = dict(sorted(fleet.items(), key=lambda item: item[1]["Size"]))
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 """
 Print the CPU MAP array to the console - will create function, later will be easier to print the map
 """
@@ -342,23 +326,46 @@ def cpuDeployAllShips():
 """
 function to deploy player single
 """
-def playerSingleShipDeploy():
+def playerSingleShipDeploy(mapPlayer, ship_size):
     while True:
-        location = input("Please choose coordinates where you would like to deploy your ship, also ship alignment and its size. Example: 3,1,h -  this will mean: 3 column, 1 row, horizontal")
+        location = input("Please choose coordinates where you would like to deploy your ship, also ship alignment and its size. Example: 3,1,h - this will mean: 3 column, 1 row, horizontal: ")
         try:
             c, r, align = [part.strip() for part in location.replace(',', ' ').replace('.', ' ').replace('x', ' ').split()]
-            if c.isdigit() and r.isdigit() and align in ["v", "h", "V", "H", "vertical", "horizontal", "Vertical", "Horizontal"]: # eliminating errors if player passes just letter of full word of alignment
-                align = align[0].capitalize()
-                return int(c), int(r), align
+            if c.isdigit() and r.isdigit() and align.lower() in ["v", "h", "vertical", "horizontal"]:
+                align = align[0].capitalize()  # Capitalize the first letter
+                mapX, mapY = int(c), int(r)
+                # Check if the ship can be placed horizontally
+                if align == "H":
+                    if mapX + ship_size > len(mapPlayer):  
+                        print("Invalid input. Ship placement is not valid. Ship will not fit on map withh given Location. Pleasde chose another location.")
+                        continue
+                    # Check if the cells are empty
+                    if all(mapPlayer[mapX + i][mapY] == 0 for i in range(ship_size)):
+                        return mapX, mapY, align
+                    else:
+                        print("Invalid input. The cells are already occupied. Please choose another location.")
+                # Check if the ship can be placed vertically
+                elif align == "V":
+                    if mapY + ship_size > len(mapPlayer[0]):  
+                        print("Invalid input. Ship placement is not valid. Please choose another location.")
+                        continue
+                        
+                    # Check if the cells are empty
+                    if all(mapPlayer[mapX][mapY + i] == 0 for i in range(ship_size)):
+                        return mapX, mapY, align
+                    else:
+                        print("Invalid input. The cells are already occupied. Please choose another location.")
+                
             else:
-                print("Invalid input, please check you have entered values and information correctly")
+                print("Invalid input, please check you have entered values and information correctly.")
+                
         except ValueError:
             print("Invalid input. Please enter coordinates, alignment, and ship size. All information MUST be separated by commas.")
 
 
 
 """
-function to deploy all layer ships
+function to deploy all player ships
 """
 def playerDeployAllShips():
     global fleetPlayer, battleShipFleetDefault, mapPlayer
@@ -368,10 +375,15 @@ def playerDeployAllShips():
         size = shipInfo["Size"]
         for i in range(quantity):
             print(f"Deploying {i+1} {shipName}(s) out of {quantity} of size {size}")
-            mapX, mapY, alignment = playerSingleShipDeploy()
-            location = (mapX, mapY)
-            deploySingleShip(mapPlayer, size, location, alignment, shipName, fleetPlayer)
+            inputCheck = "notValid"
+            while inputCheck == "notValid":
+                mapX, mapY, alignment = playerSingleShipDeploy(mapPlayer, size)
+                inputCheck = "Valid"  # Update the inputCheck after successfully deploying the ship
+                # Add additional checks or update the map and fleet as needed
+                location = (mapX, mapY)
+                deploySingleShip(mapPlayer, size, location, alignment, shipName, fleetPlayer)
     return mapPlayer
+
 
 
 cpuDeployAllShips()
@@ -526,22 +538,4 @@ def playerShoot(): #function for user to input map size
         except ValueError: #if user input can not be split in 2 parts will raise an issue:
             print("Invalid input. Please enter two numbers separated by a comma.")
     return coordX,coordY
-
-
-"""
-function to start new game
-"""
-def newGame():
-    global gameResult, fleetPlayer, fleetCPU, mapCPU, mapPlayer
-    move = random.choice("player", "CPU") # random choice who will make first move, player or computer
-
-    while gameResult != None:
-        if move == "player":
-            coordX,coordY = playerShoot()
-            coordinates = (coordX,coordY)
-            fleet = fleetPlayer
-            map = mapPlayer
-            shipName, shotInfo = shootCheck(coordX, coordY, map, fleetPlayer)
-            if not shipName:
-                fleetRemoveShip(shipName, coordinates, fleet)
 
