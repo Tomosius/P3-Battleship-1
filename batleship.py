@@ -60,7 +60,7 @@ will create list of colors, so i can use them on map.
 """
 colors = {
     "DARK_YELLOW": "\033[33m",   # Dark Yellow - single cell ship
-    "LIGHT_GRAY": "\033[37m",    # Light Gray - empty space on map,. n o need to shoot
+    "LIGHT_GRAY": "\033[37m",    # Light Gray - empty space on map,. no need to shoot, or miss shooting
     "DARK_BLUE": "\033[34m",     # Dark Blue - horizontal ships
     "DARK_GREEN": "\033[32m",    # Dark Green - vertical ships
     "DARK_RED": "\033[31m",      # Dark Red - damaged ship
@@ -72,9 +72,11 @@ colors = {
 will create ship patterns how they will be displayed
 """
 shipSymbols = {
-    "single": [colors["DARK_YELLOW"] + chr(0x25C6) + colors["RESET"]], # ship will be displayed as ◆ in DARK_YELOW
+    "Single": [colors["DARK_YELLOW"] + chr(0x25C6) + colors["RESET"]], # ship will be displayed as ◆ in DARK_YELOW
     "Horizontal": [[colors["DARK_BLUE"] + chr(0x25C0) + colors["RESET"]],[colors["DARK_BLUE"] + chr(0x25A4) + colors["RESET"]]], # ship will be displayed as ◂▤▤▤ in DARK_BLUE
-    "Vertical": [[colors["DARK_GREEN"] + chr(0x25B2) + colors["RESET"]],[colors["DARK_GREEN"] + chr(0x25A5) + colors["RESET"]]] # ship will be displayed as ▲ and below it ▥
+    "Vertical": [[colors["DARK_GREEN"] + chr(0x25B2) + colors["RESET"]],[colors["DARK_GREEN"] + chr(0x25A5) + colors["RESET"]]], # ship will be displayed as ▲ and below it ▥
+    "Hit": [colors["DARK_RED"] + chr(0x25A6) + colors["RESET"]], # if hit, will mark as ▦ in DARK_RED color
+    "Miss": [colors["LIGHT_GRAY"] + chr(0x2022) + colors["RESET"]] # if miss, will mark as • in LIGHT_GRAY
 }
 
 """
@@ -156,7 +158,7 @@ def deploySingleShip(map, length, location, alignment, ship, fleet):
     print(location)
     shipCoordinates = []  # this will be coordinates appended to fleet
     if length == 1:  # if ship is made just of one cell, then we will show only:
-        map[row][column] = shipSymbols["single"][0]
+        map[row][column] = shipSymbols["Single"][0]
         shipCoordinates.append([row, column])
     else:  # if ship is or longer then 2 cells:
         if alignment == "H":
@@ -237,4 +239,112 @@ playerDeployAllShips()
 printMap(mapPlayer)
 
 
-                
+
+"""
+function to find biggest ship not sunk in Players fleet
+"""
+def findBiggestShipInPlayerFleet():
+    global fleetPlayer # importing global variable
+    biggestShipName = None
+    biggestShipSize = 0
+    for ship, details in fleetPlayer.items(): # cycling thorough all ships in players fleet
+        size = details["Size"] # getting size info
+        quantity = details["Quantity"] # getting quontity information
+        if quantity > 0 and size > biggestShipSize: # Check if the quantity of the ship is above zero and if its size is greater than the current biggest ship size
+            biggestShipName = ship
+            biggestShipSize = size
+    return biggestShipName, biggestShipSize
+
+
+"""
+now will search for given ship on Players
+"""
+def searchForPlayerShipAndHit():
+    global mapPlayer, fleetPlayer
+    shipName, shipSize = findBiggestShipInPlayerFleet()
+    width = shipSize * 2 - 1
+    height = shipSize * 2 -1
+    while coordinates == "noneFound" : # creating loop, if there was no such big pattern found on map for deployed ship, will start making it smaller and keep searching for it till we find one pattern
+        coordinates = searchMap(mapPlayer,width,height) # looking for given ship, so we will make huge square, 2x size of ship and will look for that on map
+        orientation = random.choice("width", "height") # choosing how we will reduce searching block, horizontaly or verticaly
+        if orientation == "width":
+            width = width - 1 # reducing width
+            coordinates = searchMap(mapPlayer,width,height) #searching with lest wide pattern
+            if coordinates == "noneFound":
+                break #if there was no pattern found, now we will swap to height and search again, so we use break to keep searching
+        else:
+            height = height - 1 # reducing height
+            width = width + 1 # making width same again, as now will search with lower height
+            coordinates = searchMap(mapPlayer,width,height) # searching again
+            if coordinates == "noneFound":
+                break # we have found again nothing, so breaking 
+        width = width - 1
+        height = height - 1
+    #now we have found coordinates list
+    shootingCoordinates = random.choice(coordinates) # choosing random spot to shoot
+    coordinatesX, coordinatesY = shootingCoordinates.split(',') # getting X and Y where we will be shooting
+    #now we have X, Y, ship width, we will select center of that area if possible
+    coordinatesX = coordinatesX // 2 + 1 - (random.choice([0, 1]) if coordinatesX % 2 == 1 else 0) # now choosing middle of X coordinates, but with random choice, as if X = 5, then it would be 3, but if X = 6, then it can be 3 or 4
+    coordinatesY = coordinatesY // 2 + 1 - (random.choice([0, 1]) if coordinatesY % 2 == 1 else 0) # now choosing middle of X coordinates, but with random choice, as if X = 5, then it would be 3, but if X = 6, then it can be 3 or 4
+    shootCheck(coordinatesX,coordinatesY,mapPlayer,fleetPlayer)
+
+    
+
+"""
+function to check if shooting hit ship or not, if hit is it sunken
+"""
+cpuSHOOT = [] #global, where infoormation of shooting will be stored
+def shootCheck(coordX, coordY, map, fleet):
+    global shipSymbols, cpuSHOOT
+    checkCoordinates = [coordX,coordY]
+    shootHit = None
+    wholeShipCoordinates = []
+    for shipName,shipData in fleet.values():
+        for coordinatesAllShips in shipData["Coordinates"]:
+            if checkCoordinates in coordinatesAllShips: # if it was hit:
+                map[coordX,coordY] = shipSymbols["Hit"][0]
+                shootHit = shipName # storing ship name if hit, so it is not None, what will make next If condition to work
+                wholeShipCoordinates = coordinatesAllShips # storing all coordinates for particular ship
+    if shootHit: # now we know we hit the ship
+        cpuSHOOT.append(["Hit",coordX,coordY]) # storing shooting info
+        for singleCoordinate in wholeShipCoordinates: #checking map if ship is fully sunk after our hit
+            if map[singleCoordinate[0],singleCoordinate[1]] != shipSymbols["Hit"][0]:
+                break # one or more parts of ship is not damaged
+            else: # if there was no break, it means whole ship was sunken !!!
+                cpuSHOOT.clear() # clearing all shooting log for particular ship, as it is sunken
+                shipInfo = fleetRemoveShip(shipName, singleCoordinate, fleet)
+                print(shipInfo + "was sunken")
+    if not shootHit:
+        map[coordX][coordY] = shipSymbols["Miss"][0]
+        cpuSHOOT.append(["Miss",coordX,coordY])
+
+"""
+function to remove given ship from fleet
+"""
+def fleetRemoveShip(shipName, coordinates, fleet):
+    removedShipInfo = None  # Initialize to None
+
+    if shipName in fleet:
+        shipData = fleet[shipName]
+
+        # Check if the ship has more than one quantity
+        if shipData["Quantity"] > 1:
+            for index, coordinatesFleet in enumerate(shipData["Coordinates"]):
+                if coordinates in coordinatesFleet:
+                    removedCoordinates = shipData["Coordinates"].pop(index)
+                    shipData["Quantity"] -= 1
+                    removedShipInfo = {
+                        "ShipName": shipName,
+                        "RemovedCoordinates": removedCoordinates
+                    }
+                    if shipData["Quantity"] == 0:
+                        del fleet[shipName]
+                    break  # Exit the loop after removing the coordinates
+        else:
+            # If there is only one ship, remove the entire ship from the fleet
+            del fleet[shipName]
+            removedShipInfo = {
+                "ShipName": shipName,
+                "RemovedCoordinates": shipData["Coordinates"]
+            }
+    return removedShipInfo
