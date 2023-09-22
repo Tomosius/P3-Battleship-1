@@ -4,7 +4,7 @@ Section for Global Variables
 mapX = 10           # default map size X - horizontal
 mapY = 10          # default map size Y - vertical
 
-
+gameResult = None
 """
 default Battleship fleet - i use as dictionary, so in case if player changes map size or ships quantities, it will be easier to play
 """
@@ -118,14 +118,14 @@ mapPlayer = [[0 for j in range(mapY)] for i in range(mapX)]
 """
 Print the CPU MAP array to the console - will create function, later will be easier to print the map
 """
-def printMap(table):
+def printMap(map):
     print("   ", end="")
-    for col_index in range(len(table[0])):
+    for col_index in range(len(map[0])):
         print(f"{col_index}  ", end="")
-    print("\n" + "   " + "=" * (len(table[0]) * 3))
+    print("\n" + "   " + "=" * (len(map[0]) * 3))
 
     # Iterate through the table and print row coordinates on the left side
-    for row_index, row in enumerate(table):
+    for row_index, row in enumerate(map):
         print(f"{row_index} |", end=" ")
         for value in row:
             print(f"{value}  ", end="")
@@ -293,11 +293,12 @@ def searchForPlayerShipAndHit():
 """
 function to check if shooting hit ship or not, if hit is it sunken
 """
-cpuSHOOT = [] #global, where infoormation of shooting will be stored
+shotInfo = [] #global, where infoormation of shooting will be stored
+
 def shootCheck(coordX, coordY, map, fleet):
-    global shipSymbols, cpuSHOOT
+    global shipSymbols, shotInfo
     checkCoordinates = [coordX,coordY]
-    shootHit = None
+    shootHit = None # this will be ship name
     wholeShipCoordinates = []
     for shipName,shipData in fleet.values():
         for coordinatesAllShips in shipData["Coordinates"]:
@@ -306,27 +307,26 @@ def shootCheck(coordX, coordY, map, fleet):
                 shootHit = shipName # storing ship name if hit, so it is not None, what will make next If condition to work
                 wholeShipCoordinates = coordinatesAllShips # storing all coordinates for particular ship
     if shootHit: # now we know we hit the ship
-        cpuSHOOT.append(["Hit",coordX,coordY]) # storing shooting info
+        shotInfo.append(["Hit",coordX,coordY]) # storing shooting info
         for singleCoordinate in wholeShipCoordinates: #checking map if ship is fully sunk after our hit
             if map[singleCoordinate[0],singleCoordinate[1]] != shipSymbols["Hit"][0]:
                 break # one or more parts of ship is not damaged
             else: # if there was no break, it means whole ship was sunken !!!
-                cpuSHOOT.clear() # clearing all shooting log for particular ship, as it is sunken
+                shotInfo.clear() # clearing all shooting log for particular ship, as it is sunken
                 shipInfo = fleetRemoveShip(shipName, singleCoordinate, fleet)
                 print(shipInfo + "was sunken")
     if not shootHit:
         map[coordX][coordY] = shipSymbols["Miss"][0]
-        cpuSHOOT.append(["Miss",coordX,coordY])
+        shotInfo.append(["Miss",coordX,coordY])
+    return shootHit, shotInfo
 
 """
 function to remove given ship from fleet
 """
 def fleetRemoveShip(shipName, coordinates, fleet):
     removedShipInfo = None  # Initialize to None
-
     if shipName in fleet:
         shipData = fleet[shipName]
-
         # Check if the ship has more than one quantity
         if shipData["Quantity"] > 1:
             for index, coordinatesFleet in enumerate(shipData["Coordinates"]):
@@ -347,4 +347,57 @@ def fleetRemoveShip(shipName, coordinates, fleet):
                 "ShipName": shipName,
                 "RemovedCoordinates": shipData["Coordinates"]
             }
+            print("removed ship info" + removedShipInfo)
     return removedShipInfo
+
+
+"""
+function to check is there any more ships remaining in fleet
+"""
+def fleetCheck(fleet):
+    ships_to_remove = []  # List to store ship names with quantity 0
+    # Find ships with quantity 0
+    for ship_name, ship_data in fleet.items():
+        if ship_data["Quantity"] == 0:
+            ships_to_remove.append(ship_name)
+    # Remove ships with quantity 0
+    for ship_name in ships_to_remove:
+        del fleet[ship_name]
+    if not fleet: # if there is nor remaining ships in fleet
+        print("game over")
+
+
+"""
+function for player to input shoot coordinates
+"""
+def playerShoot(): #function for user to input map size
+    while True:
+        # user will be requested to input map size
+        coordinatesPlayerShoot = input("Please select coordinates X and Y where you would like to shoot. First number - Horizontal, second number - Vertical. Example: 3,6 \n")
+        try: #testing if user used correct pattern to input map size
+            coordX,coordY = coordinatesPlayerShoot.split(',') # splitting user input into 2 separate parts 
+            if coordX.isdigit() and coordY.isdigit(): # checking if both inputs parts are numbers
+                break #now function can stop as all is correct
+            else:  #if any part of inout is not numeric, printing out message
+                print("Invalid input. Please enter two numbers separated by a comma.")
+        except ValueError: #if user input can not be split in 2 parts will raise an issue:
+            print("Invalid input. Please enter two numbers separated by a comma.")
+    return coordX,coordY
+
+
+"""
+function to start new game
+"""
+def newGame():
+    global gameResult, fleetPlayer, fleetCPU, mapCPU, mapPlayer
+    move = random.choice("player", "CPU") # random choice who will make first move, player or computer
+    while gameResult != None:
+        if move == "player":
+            coordX,coordY = playerShoot()
+            coordinates = (coordX,coordY)
+            fleet = fleetPlayer
+            map = mapPlayer
+            shipName, shotInfo = shootCheck(coordX, coordY, map, fleetPlayer)
+            if not shipName:
+                fleetRemoveShip(shipName, coordinates, fleet)
+
