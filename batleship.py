@@ -1,193 +1,204 @@
-"""
-Section for Global Variables
-"""
-mapX = 10           # default map size X - horizontal
-mapY = 10          # default map size Y - vertical
+import curses
+import random
+import copy
 
-gameResult = None
-"""
-default Battleship fleet - i use as dictionary, so in case if player changes map size or ships quantities, it will be easier to play
-"""
-battleShipFleetDefault = {
-    "Aircraft Carrier": {
-        "Size": 5,
-        "Quantity": 1,
-        "Coordinates": []
-    },
-    "Battleship": {
-        "Size": 4,
-        "Quantity": 0,
-        "Coordinates": []
-    },
-    "Cruiser": {
-        "Size": 3,
-        "Quantity": 0,
-        "Coordinates": []
-    },
-    "Submarine": {
-        "Size": 3,
-        "Quantity": 0,
-        "Coordinates": []
-    },
-    "Destroyer": {
-        "Size": 2,
-        "Quantity": 0,
-        "Coordinates": []
-    },
-    "Dingy Boat": {
-        "Size": 1,
-        "Quantity": 0,
-        "Coordinates": []
-    }
+# Constants for map dimensions
+MAP_WIDTH = 10
+MAP_HEIGHT = 10
+
+# Initialize the game result, CPU actions, and player actions
+gameResult = None  # Stores the result of the game (win, lose, or draw)
+cpuActions = []  # List to store CPU actions (shots)
+playerActions = []  # List to store Player actions (shots)
+cpuShootCoordinates = []  # List to store CPU's shot coordinates
+
+def initializeMaps(width: int, height: int) -> list:
+    """
+    Initialize a 2D map with given dimensions.
+
+    Args:
+        width (int): The width of the map.
+        height (int): The height of the map.
+
+    Returns:
+        list: A 2D map filled with zeros.
+    """
+    return [[0 for _ in range(height)] for _ in range(width)]
+
+# Create maps for CPU and Player
+mapCpu = initializeMaps(MAP_WIDTH, MAP_HEIGHT)  # CPU's visible map
+mapCpuHidden = initializeMaps(MAP_WIDTH, MAP_HEIGHT)  # CPU's hidden map
+mapPlayerHidden = initializeMaps(MAP_WIDTH, MAP_HEIGHT)  # Player's hidden map
+mapPlayer = initializeMaps(MAP_WIDTH, MAP_HEIGHT)  # Player's visible map
+
+# Default settings for the fleet
+FLEET_DEFAULT = {
+    "AircraftCarrier": {"Size": 5, "Quantity": 1, "Coordinates": []},
+    "Battleship": {"Size": 4, "Quantity": 3, "Coordinates": []},
+    "Cruiser": {"Size": 3, "Quantity": 0, "Coordinates": []},
+    "Submarine": {"Size": 3, "Quantity": 0, "Coordinates": []},
+    "Destroyer": {"Size": 2, "Quantity": 0, "Coordinates": []},
+    "DingyBoat": {"Size": 1, "Quantity": 0, "Coordinates": []}
 }
 
+# Create a copy of default fleet settings for CPU and Player
+fleetCpu = copy.deepcopy(FLEET_DEFAULT)  # Copy of default fleet settings for CPU
+fleetPlayer = copy.deepcopy(FLEET_DEFAULT)  # Copy of default fleet settings for Player
 
-"""
-function to print out all fleet as a table
-"""
-def printFleet(fleet):
-    print("{:<20} {:<10} {:<10} {:<50}".format("Ship Type", "Size", "Quantity", "Coordinates"))
-    print("="*40)
-    for ship, details in fleet.items():
-        size = details["Size"]
-        quantity = details["Quantity"]
-        coordinates = details["Coordinates"]
-        coordinates_str = str(coordinates)  # Convert the list to a string
-        print("{:<20} {:<10} {:<10} {:<50}".format(ship, size, quantity, coordinates_str))
+def printFleet(fleet: dict) -> None:
+    """
+    Print the fleet information in a formatted manner.
 
-"""
-will create list of colors, so i can use them on map.
-"""
-colors = {
-    "DARK_YELLOW": "\033[33m",   # Dark Yellow - single cell ship
-    "LIGHT_GRAY": "\033[37m",    # Light Gray - empty space on map,. no need to shoot, or miss shooting
-    "DARK_BLUE": "\033[34m",     # Dark Blue - horizontal ships
-    "DARK_GREEN": "\033[32m",    # Dark Green - vertical ships
-    "DARK_RED": "\033[31m",      # Dark Red - damaged ship
-    "RESET": "\033[0m"           # Reset color to default
+    Args:
+        fleet (dict): A dictionary containing fleet information.
+
+    Returns:
+        None
+    """
+    # Print the header for the fleet information
+    print("{:<20} {:<10} {:<10} {:<50}".format("ShipType", "Size", "Quantity", "Coordinates"))
+    print("=" * 40)
+    
+    # Loop through each ship in the fleet and print its details
+    for ship, shipDetails in fleet.items():
+        size = shipDetails["Size"]
+        quantity = shipDetails["Quantity"]
+        coordinates = shipDetails["Coordinates"]
+        # Print the ship's details in a formatted manner
+        print("{:<20} {:<10} {:<10} {:<50}".format(ship, size, quantity, coordinates))
+
+# Colors used for rendering the game elements
+COLORS = {
+    "DarkYellow": "\033[33m",
+    "LightGray": "\033[37m",
+    "DarkBlue": "\033[34m",
+    "DarkGreen": "\033[32m",
+    "DarkRed": "\033[31m",
+    "Reset": "\033[0m"
 }
 
-
-"""
-will create ship patterns how they will be displayed
-"""
+# Ship symbols remain the same as per your request
 shipSymbols = {
-    "Single": [colors["DARK_YELLOW"] + chr(0x25C6) + colors["RESET"]],  # ship will be displayed as ◆ in DARK_YELOW
-    "Horizontal": [[colors["DARK_BLUE"] + chr(0x25C0) + colors["RESET"]], [colors["DARK_BLUE"] + chr(0x25A4) + colors["RESET"]]],
-    # ship will be displayed as ◂▤▤▤ in DARK_BLUE
-    "Vertical": [[colors["DARK_GREEN"] + chr(0x25B2) + colors["RESET"]], [colors["DARK_GREEN"] + chr(0x25A5) + colors["RESET"]]],  # ship will be displayed as ▲ and below it ▥ in DARK_GREEN
-    "Hit": [colors["DARK_RED"] + chr(0x25A6) + colors["RESET"]],  # if hit, will mark as ▦ in DARK_RED color
-    "Miss": [colors["LIGHT_GRAY"] + chr(0x2022) + colors["RESET"]],  # if miss, will mark as • in LIGHT_GRAY
-    "SingleSunk": [colors["DARK_RED"] + chr(0x25C6) + colors["RESET"]],  # ship will be displayed as ◆ in DARK_RED
-    "HorizontalSunk": [[colors["DARK_RED"] + chr(0x25C0) + colors["RESET"]], [colors["DARK_RED"] + chr(0x25A4) + colors["RESET"]]],
-    # ship will be displayed as ◂▤▤▤ in DARK_RED
-    "VerticalSunk": [[colors["DARK_RED"] + chr(0x25B2) + colors["RESET"]], [colors["DARK_RED"] + chr(0x25A5) + colors["RESET"]]],  # ship will be displayed as ▲ and below it ▥ in DARK_RED
+    "Single": [COLORS["DarkYellow"] + chr(0x25C6) + COLORS["Reset"]],
+    "Horizontal": [[COLORS["DarkBlue"] + chr(0x25C0) + COLORS["Reset"]], [COLORS["DarkBlue"] + chr(0x25A4) + COLORS["Reset"]]],
+    "Vertical": [[COLORS["DarkGreen"] + chr(0x25B2) + COLORS["Reset"]], [COLORS["DarkGreen"] + chr(0x25A5) + COLORS["Reset"]]],
+    "Hit": [COLORS["DarkRed"] + chr(0x25A6) + COLORS["Reset"]],
+    "miss": [COLORS["LightGray"] + chr(0x2022) + COLORS["Reset"]],
+    "singleSunk": [COLORS["DarkRed"] + chr(0x25C6) + COLORS["Reset"]],
+    "horizontalSunk": [[COLORS["DarkRed"] + chr(0x25C0) + COLORS["Reset"]], [COLORS["DarkRed"] + chr(0x25A4) + COLORS["Reset"]]],
+    "verticalSunk": [[COLORS["DarkRed"] + chr(0x25B2) + COLORS["Reset"]], [COLORS["DarkRed"] + chr(0x25A5) + COLORS["Reset"]]],
 }
 
-"""
-section for imports of libraries
-"""
-import curses # want to implement mouse activity for game, not just terminal, but this for future, depends how project will go
-import random # i believe this import is self explaining
-import copy # will use it to copy default fleet to CPU and player, where coordinates and etc can be stored for future use
-fleetCPU = copy.deepcopy(battleShipFleetDefault) # making copy of fleet for CPU
-fleetPlayer = copy.deepcopy(battleShipFleetDefault) # making copy of fleet for Player
+def gameAdjust(fleet):
+    """
+    Adjust game settings, including the map and Battle Ships Fleet.
 
+    Args:
+        fleet (dict): A dictionary containing fleet information.
 
-"""
-creating an array that will be representing map based on X and Y
-"""
-mapCPU = [[0 for c in range(mapY)] for r in range(mapX)]
-mapPlayer = [[0 for j in range(mapY)] for i in range(mapX)]
-
-
-"""
-function to adjust game settings
-"""
-def gameAdjust():
-    global battleShipFleetDefault
-    while True:  # Continue looping until the player chooses to finish (choice 4)
-        changes = input("If you would like to adjust game settings, like map or Battle Ships Fleet, please enter Y (or enter 4 to finish): \n")
+    Returns:
+        bool: True if the game adjustment was interrupted, False otherwise.
+    """
+    while True:
+        changes = input("If you would like to adjust game settings, like map or Battle Ships Fleet, please enter Y (or enter or N to skip changing game settings and continue to deploying ships): \n")
+        changes = changes.capitalize()
         try:
-            changes = changes.capitalize()
             if changes == "Y" or changes == "YES":
-                print("Be game Default settings, Map is 10 by 10 \n")
+                print("Using default game settings; the map is 10 by 10.\n")
                 print("Current game fleet is:")
-                printFleet(battleShipFleetDefault)
+                printFleet(fleet)
                 print("\nOptions:")
                 print("1. Modify Game Map")
                 print("2. Modify existing ship")
-                print("3. Add new ship")
+                print("3. Add a new ship")
                 print("4. Finish")
                 choice = input("Enter your choice (1/2/3/4): ")
                 if choice.isdigit():
-                    choice = int(choice)  # Convert to integer
+                    choice = int(choice)
                     if choice == 1:
                         mapSizeSelect()
                     elif choice == 2:
-                        modifyShip(battleShipFleetDefault)
+                        modifyShip(fleet)
                     elif choice == 3:
-                        addNewShip(battleShipFleetDefault)
+                        addNewShip(fleet)
                     elif choice == 4:
-                        break  # Exit the loop when the player chooses to finish
+                        return False
                     else:
                         print("Invalid choice. Please select a valid option.")
                 else:
                     print("Invalid input. Please enter a valid choice (1/2/3/4).")
+            elif changes == "N" or changes == "NO" or changes == "":
+                return False
         except KeyboardInterrupt:
             print("Game adjustment interrupted.")
+    return False
 
-
-"""
-Function for player to change map size
-"""
 def mapSizeSelect():
-    global mapX, mapY, mapCPU, mapPlayer
+    """
+    Select the size of the game map (Width and Height).
+
+    Updates:
+        - global mapWidth
+        - global mapHeight
+        - global mapCpu
+        - global mapPlayer
+
+    Returns:
+        None
+    """
+    global mapWidth, mapHeight, mapCpu, mapPlayer
     while True:
-        mapSize = input("Please select MAP size You would like to play. First number - Width, second number - Height. Example: 10,10 \n")
+        mapSize = input("Please select the map size you would like to play. Enter the first number for Width and the second number for Height. Example: 10,10\n")
         try:
-            mapX, mapY = mapSize.split(',')
-            if mapX.isdigit() and mapY.isdigit():
-                mapX, mapY = int(mapX), int(mapY)
-                print(f"The game You will play will be {mapX} wide and {mapY} high")
+            mapWidth, mapHeight = mapSize.split(',')
+            if mapWidth.isdigit() and mapHeight.isdigit():
+                mapWidth, mapHeight = int(mapWidth), int(mapHeight)
+                print(f"The game you will play will be {mapWidth} wide and {mapHeight} high.")
                 break
             else:
                 print("Invalid input. Please enter two numbers separated by a comma.")
         except ValueError:
             print("Invalid input. Please enter two numbers separated by a comma.")
-    mapCPU = [[0 for _ in range(mapY)] for _ in range(mapX)]
-    mapPlayer = [[0 for _ in range(mapY)] for _ in range(mapX)]
+    mapCpu = [[0 for _ in range(mapHeight)] for _ in range(mapWidth)]
+    mapPlayer = [[0 for _ in range(mapHeight)] for _ in range(mapWidth)]
 
-
-"""
-function to modify existing ships in fleet
-"""
 def modifyShip(fleet):
-    sorted_fleet = dict(sorted(fleet.items(), key=lambda item: item[1]["Size"]))
-    printFleet(sorted_fleet)
+    """
+    Modify an existing ship in the fleet.
+
+    Args:
+        fleet (dict): A dictionary containing fleet information.
+
+    Returns:
+        None
+    """
+    # Sort the fleet by ship size for easier navigation
+    fleetSorted = dict(sorted(fleet.items(), key=lambda item: item[1]["Size"]))
+    printFleet(fleetSorted)
     shipChoice = input("Enter the ship name or index to modify: ")
-    
     if shipChoice.isdigit():
         shipIndex = int(shipChoice)
-        if 1 <= shipIndex <= len(sorted_fleet):
-            shipName = list(sorted_fleet.keys())[shipIndex - 1]
+        if 1 <= shipIndex <= len(fleetSorted):
+            shipName = list(fleetSorted.keys())[shipIndex - 1]
             if shipName in fleet:
                 while True:
-                    size_input = input(f"Enter the new size of the '{shipName}' ship: ")
-                    if size_input.isdigit():
-                        size = int(size_input)
+                    sizeInput = input(f"Enter the new size of the '{shipName}' ship: ")
+                    if sizeInput.isdigit():
+                        size = int(sizeInput)
                         break
                     else:
                         print("Invalid input. Please enter a valid size as a positive integer.")
                 while True:
-                    quantity_input = input(f"Enter the new quantity of the '{shipName}' ship: ")
-                    if quantity_input.isdigit():
-                        quantity = int(quantity_input)
+                    quantityInput = input(f"Enter the new quantity of the '{shipName}' ship: ")
+                    if quantityInput.isdigit():
+                        quantity = int(quantityInput)
                         break
                     else:
                         print("Invalid input. Please enter a valid quantity as a non-negative integer.")
                 fleet[shipName]["Size"] = size
                 fleet[shipName]["Quantity"] = quantity
+                fleet[shipName]["Coordinates"] = []
+                fleet = dict(sorted(fleet.items(), key=lambda item: item[1]["Size"]))
             else:
                 print(f"The ship '{shipName}' does not exist in the fleet.")
         else:
@@ -196,16 +207,16 @@ def modifyShip(fleet):
         shipName = shipChoice
         if shipName in fleet:
             while True:
-                size_input = input(f"Enter the new size of the '{shipName}' ship: ")
-                if size_input.isdigit():
-                    size = int(size_input)
+                sizeInput = input(f"Enter the new size of the '{shipName}' ship: ")
+                if sizeInput.isdigit():
+                    size = int(sizeInput)
                     break
                 else:
                     print("Invalid input. Please enter a valid size as a positive integer.")
             while True:
-                quantity_input = input(f"Enter the new quantity of the '{shipName}' ship: ")
-                if quantity_input.isdigit():
-                    quantity = int(quantity_input)
+                quantityInput = input(f"Enter the new quantity of the '{shipName}' ship: ")
+                if quantityInput.isdigit():
+                    quantity = int(quantityInput)
                     break
                 else:
                     print("Invalid input. Please enter a valid quantity as a non-negative integer.")
@@ -216,22 +227,28 @@ def modifyShip(fleet):
         else:
             print(f"The ship '{shipName}' does not exist in the fleet.")
 
-"""
-function to add new ships to fleet
-"""
 def addNewShip(fleet):
-    ship_name = input("Enter the name of the new ship: ")
+    """
+    Add a new ship to the fleet.
+
+    Args:
+        fleet (dict): A dictionary containing fleet information.
+
+    Returns:
+        None
+    """
+    shipName = input("Enter the name of the new ship: ")
     while True:
-        size_input = input("Enter the size of the new ship: ")
-        if size_input.isdigit():
-            size = int(size_input)
+        sizeInput = input("Enter the size of the new ship: ")
+        if sizeInput.isdigit():
+            size = int(sizeInput)
             break
         else:
             print("Invalid input. Please enter a valid size as a positive integer.")
     while True:
-        quantity_input = input("Enter the quantity of the new ship: ")
-        if quantity_input.isdigit():
-            quantity = int(quantity_input)
+        quantityInput = input("Enter the quantity of the new ship: ")
+        if quantityInput.isdigit():
+            quantity = int(quantityInput)
             break
         else:
             print("Invalid input. Please enter a valid quantity as a non-negative integer.")
@@ -239,7 +256,7 @@ def addNewShip(fleet):
     for i in range(size):
         coord = input(f"Enter coordinates for part {i + 1} of the ship (e.g., 'A3'): ").strip().upper()
         coordinates.append([ord(coord[0]) - ord('A'), int(coord[1:]) - 1])
-    fleet[ship_name] = {
+    fleet[shipName] = {
         "Size": size,
         "Quantity": quantity,
         "Coordinates": coordinates
@@ -247,295 +264,567 @@ def addNewShip(fleet):
     fleet = dict(sorted(fleet.items(), key=lambda item: item[1]["Size"]))
 
 
-"""
-Print the CPU MAP array to the console - will create function, later will be easier to print the map
-"""
 def printMap(map):
+    """
+    Print the game map.
+
+    Args:
+        map (list): A 2D map to be printed.
+
+    Returns:
+        None
+    """
     print("   ", end="")
-    for col_index in range(len(map[0])):
-        print(f"{col_index}  ", end="")
+    for colIndex in range(len(map[0])):
+        print(f"{colIndex}  ", end="")
     print("\n" + "   " + "=" * (len(map[0]) * 3))
 
-    # Iterate through the table and print row coordinates on the left side
-    for row_index, row in enumerate(map):
-        print(f"{row_index} |", end=" ")
+    for rowIndex, row in enumerate(map):
+        print(f"{rowIndex} |", end=" ")
         for value in row:
             print(f"{value}  ", end="")
-        print() 
+        print()
 
-"""
-function to search map by given pattern
-"""
+def checkCoordinates(x, y, map):
+    """
+    Check if input coordinates are within map boundaries.
+
+    Args:
+        x (int): X-coordinate.
+        y (int): Y-coordinate.
+        map (list): A 2D map.
+
+    Returns:
+        bool: True if coordinates are valid, False otherwise.
+    """
+    if x >= len(map) or y >= len(map[0]) or x < 0 or y < 0:
+        print(f"Your entered coordinates ({x}, {y}) are out of the map. Please enter correct values.")
+        return False
+    return True
+
+def checkShipInput(info):
+    """
+    Check if ship deployment information is valid.
+
+    Args:
+        info (str): A string containing ship deployment information (x, y, and alignment).
+
+    Returns:
+        bool: True if input is valid, False otherwise.
+    """
+    try:
+        parts = [part.strip() for part in info.split(',')]
+        if len(parts) == 3:
+            mapX, mapY, align = parts
+            if mapX.isdigit() and mapY.isdigit() and align.lower() in ["v", "h", "Vertical", "Horizontal"]:
+                return True
+            else:
+                print("Please check that you have entered values and information correctly.")
+                return False
+        else:
+            print("Please enter coordinates, alignment, and ship size separated by commas. Provided information is insufficient.")
+            return False
+    except ValueError:
+        print("Please enter coordinates, alignment, and ship size separated by commas.")
+        return False
+
+
+def inputShipCheck(x, y, align, map, length):
+    """
+    Check if ship deployment input is valid.
+
+    Args:
+        x (int): X-coordinate.
+        y (int): Y-coordinate.
+        align (str): Ship alignment ("H" for horizontal, "V" for vertical).
+        map (list): A 2D map.
+        length (int): Length of the ship.
+
+    Returns:
+        bool: True if the input is valid for ship placement, False otherwise.
+    """
+    if 0 <= x < len(map) and 0 <= y < len(map[0]):
+        if x + length > len(map) or y + length > len(map[0]):
+            print(f"Coordinates you have given are within the map, but the ship cannot be placed as part of its body will be out of the map. Please choose different coordinates.")
+            return False
+        elif align == "H":
+            if all(map[x][y + i] == 0 for i in range(length)):
+                print("The ship will fit.")
+                return True
+            else:
+                print(f"Sorry, but the ship cannot be placed on the map horizontally at coordinates {x} and {y} as there is another ship there. Please choose different coordinates.")
+                return False
+        elif align == "V":
+            if all(map[x + i][y] == 0 for i in range(length)):
+                print("The ship will fit.")
+                return True
+            else:
+                print(f"Sorry, but the ship cannot be placed on the map vertically at coordinates {x} and {y} as there is another ship there. Please choose different coordinates.")
+                return False
+    else:
+        print("Sorry, but the given coordinates are out of the map's size. Please choose valid ones.")
+        return False
+
+
+def playerDeployAllShips():
+    """
+    Deploy all player ships.
+
+    Updates:
+        - global fleetPlayer
+        - global FLEET_DEFAULT
+        - global mapPlayer
+
+    Returns:
+        list: The player's map with deployed ships.
+    """
+    global fleetPlayer, FLEET_DEFAULT, mapPlayer
+    fleetPlayer = copy.deepcopy(FLEET_DEFAULT)
+    for shipName, shipInfo in fleetPlayer.items():
+        quantity = shipInfo["Quantity"]
+        size = shipInfo["Size"]
+        for i in range(quantity):
+            printMap(mapPlayer)
+            print(f"Now you will be deploying ship {shipName} NO: {i + 1} of a total {quantity} of this type of ships")
+            while True:  # Loop to keep asking the user to input correct information to deploy a ship
+                randomX = random.randint(0, len(mapPlayer) - 1)
+                randomY = random.randint(0, len(mapPlayer[0]) - 1)
+                randomAlignment = random.choice(['H', 'V'])
+                userShipInput = input(f"Please choose coordinates where you would like to deploy your ship, also the ship alignment and its size. (Column, Row, alignment) Example: {randomX},{randomY},{randomAlignment}: ")
+                if not checkShipInput(userShipInput):
+                    continue
+                x, y, align = userShipInput.split(',')
+                x = int(x)  # Convert to integer
+                y = int(y)  # Convert to integer
+                alignment = align[0].upper()  # Taking just the first letter and in uppercase
+                if not checkCoordinates(x, y, mapPlayer):
+                    continue
+                elif not inputShipCheck(x, y, alignment, mapPlayer, size):
+                    continue
+                location = [x, y]
+                deploySingleShip(mapPlayer, size, location, alignment, shipName, fleetPlayer)
+                break  # Successfully deployed the ship, so exit the loop
+    return mapPlayer
+
+def deploySingleShip(map, length, location, alignment, shipName, fleet):
+    """
+    Deploy a single ship on the map.
+
+    Args:
+        map (list): A 2D map.
+        length (int): Length of the ship.
+        location (list): Coordinates [row, column] where the ship will be deployed.
+        alignment (str): Ship alignment ("H" for horizontal, "V" for vertical).
+        shipName (str): Name of the ship.
+        fleet (dict): A dictionary containing fleet information.
+
+    Returns:
+        list: The updated map with the deployed ship.
+    """
+    global shipSymbols
+    row, column = location
+    print(location)
+    shipCoordinates = []
+    if length == 1:
+        map[row][column] = shipSymbols["Single"][0]
+        shipCoordinates.append([row, column])
+        return map
+    else:
+        if alignment == "H":
+            shipCoordinates.append([row, column])
+            map[row][column] = shipSymbols["Horizontal"][0][0]
+            for i in range(length - 1):
+                map[row][column + i + 1] = shipSymbols["Horizontal"][1][0]
+                shipCoordinates.append([row, column + i + 1])
+        elif alignment == "V":
+            shipCoordinates.append([row, column])
+            map[row][column] = shipSymbols["Vertical"][0][0]
+            for i in range(length - 1):
+                map[row + i + 1][column] = shipSymbols["Vertical"][1][0]
+                shipCoordinates.append([row + i + 1, column])
+    fleet[shipName]["Coordinates"].append(shipCoordinates)
+    printMap(map)
+    print(f"You have deployed {shipName} in Coordinates: {location}")
+    return map
+
+
 def searchMap(map, width, height):
+    """
+    Search the map for a pattern to find suitable deployment coordinates for the CPU.
+
+    Args:
+        map (list): A 2D map to search.
+        width (int): Width of the pattern to search for.
+        height (int): Height of the pattern to search for.
+
+    Returns:
+        Union[list, str]: A list of suitable coordinates or 'noneFound' if none are found.
+    """
     coordinatesList = []
     for i in range(len(map) - height + 1):
         for j in range(len(map[0]) - width + 1):
             subgrid = [row[j:j + width] for row in map[i:i + height]]
             if all(cell == 0 for row in subgrid for cell in row):
                 coordinatesList.append((i, j))
-    if not coordinatesList: # Check if no coordinates were fuound, so coordinatesList is empty
+    if not coordinatesList:
         return 'noneFound'
     return coordinatesList
 
-
-def deploySingleShip(map, length, location, alignment, ship, fleet):
-    global shipSymbols
-    row, column = location  # getting row and column numbers
-    print(location)
-    shipCoordinates = []  # this will be coordinates appended to fleet
-    if length == 1:  # if ship is made just of one cell, then we will show only:
-        map[row][column] = shipSymbols["Single"][0]
-        shipCoordinates.append([row, column])
-    else:  # if ship is or longer then 2 cells:
-        if alignment == "H":
-            map[row][column] = shipSymbols["Horizontal"][0][0]
-            shipCoordinates.append([row, column])
-            for i in range(length - 1):
-                map[row][column + i + 1] = shipSymbols["Horizontal"][1][0]
-                shipCoordinates.append([row, column + i + 1])
-        else:
-            map[row][column] = shipSymbols["Vertical"][0][0]
-            shipCoordinates.append([row, column])
-            for i in range(length - 1):
-                map[row + i + 1][column] = shipSymbols["Vertical"][1][0]
-                shipCoordinates.append([row + i + 1, column])
-    fleet[ship]["Coordinates"].append(shipCoordinates)
-    return map
-
-
-"""
-function to deploy CPU ships
-"""
 def cpuDeployAllShips():
-    global fleetCPU, battleShipFleetDefault, mapCPU
-    fleetCPU = copy.deepcopy(battleShipFleetDefault) # making fresh copy, in case there were any changes made for map size or fleet
-    for shipName, shipInfo in fleetCPU.items():
+    """
+    Deploy all CPU ships on the map.
+
+    Updates:
+        - global fleetCpu
+        - global FLEET_DEFAULT
+        - global mapCpu
+
+    Returns:
+        None
+    """
+    global fleetCpu, FLEET_DEFAULT, mapCpu
+    fleetCpu = copy.deepcopy(FLEET_DEFAULT)  # Make a fresh copy, in case there were any changes made for map size or fleet
+    for shipName, shipInfo in fleetCpu.items():
         quantity = shipInfo["Quantity"]
         size = shipInfo["Size"]
         print(f"Deploying {quantity} {shipName}(s) of size {size}")
         for i in range(quantity):
-            symbol = random.choice(["H", "V"]) # horizontal or vertical
+            symbol = random.choice(["H", "V"])  # Horizontal or vertical
             if symbol == "H":
-                location = random.choice(searchMap(mapCPU, size, 1))
+                location = random.choice(searchMap(mapCpu, size, 1))
             elif symbol == "V":
-                location = random.choice(searchMap(mapCPU, 1, size))
-            deploySingleShip(mapCPU, size, location, symbol, shipName, fleetCPU)
-    return mapCPU
+                location = random.choice(searchMap(mapCpu, 1, size))
+            deploySingleShip(mapCpu, size, location, symbol, shipName, fleetCpu)
+    printMap(mapCpu)
 
 
-"""
-function to deploy player single
-"""
-def playerSingleShipDeploy(mapPlayer, ship_size):
-    while True:
-        location = input("Please choose coordinates where you would like to deploy your ship, also ship alignment and its size. Example: 3,1,h - this will mean: 3 column, 1 row, horizontal: ")
-        try:
-            c, r, align = [part.strip() for part in location.replace(',', ' ').replace('.', ' ').replace('x', ' ').split()]
-            if c.isdigit() and r.isdigit() and align.lower() in ["v", "h", "vertical", "horizontal"]:
-                align = align[0].capitalize()  # Capitalize the first letter
-                mapX, mapY = int(c), int(r)
-                # Check if the ship can be placed horizontally
-                if align == "H":
-                    if mapX + ship_size > len(mapPlayer):  
-                        print("Invalid input. Ship placement is not valid. Ship will not fit on map withh given Location. Pleasde chose another location.")
-                        continue
-                    # Check if the cells are empty
-                    if all(mapPlayer[mapX + i][mapY] == 0 for i in range(ship_size)):
-                        return mapX, mapY, align
-                    else:
-                        print("Invalid input. The cells are already occupied. Please choose another location.")
-                # Check if the ship can be placed vertically
-                elif align == "V":
-                    if mapY + ship_size > len(mapPlayer[0]):  
-                        print("Invalid input. Ship placement is not valid. Please choose another location.")
-                        continue
-                        
-                    # Check if the cells are empty
-                    if all(mapPlayer[mapX][mapY + i] == 0 for i in range(ship_size)):
-                        return mapX, mapY, align
-                    else:
-                        print("Invalid input. The cells are already occupied. Please choose another location.")
-                
-            else:
-                print("Invalid input, please check you have entered values and information correctly.")
-                
-        except ValueError:
-            print("Invalid input. Please enter coordinates, alignment, and ship size. All information MUST be separated by commas.")
+def findBiggestShipInPlayerFleet(fleet):
+    """
+    Find the biggest ship in the player's fleet.
 
+    Args:
+        fleet (dict): A dictionary containing fleet information.
 
-
-"""
-function to deploy all player ships
-"""
-def playerDeployAllShips():
-    global fleetPlayer, battleShipFleetDefault, mapPlayer
-    fleetPlayer = copy.deepcopy(battleShipFleetDefault)
-    for shipName, shipInfo in fleetPlayer.items():
-        quantity = shipInfo["Quantity"]
-        size = shipInfo["Size"]
-        for i in range(quantity):
-            print(f"Deploying {i+1} {shipName}(s) out of {quantity} of size {size}")
-            inputCheck = "notValid"
-            while inputCheck == "notValid":
-                mapX, mapY, alignment = playerSingleShipDeploy(mapPlayer, size)
-                inputCheck = "Valid"  # Update the inputCheck after successfully deploying the ship
-                # Add additional checks or update the map and fleet as needed
-                location = (mapX, mapY)
-                deploySingleShip(mapPlayer, size, location, alignment, shipName, fleetPlayer)
-    return mapPlayer
-
-
-
-cpuDeployAllShips()
-printMap(mapCPU)
-printFleet(fleetCPU)
-print()
-playerDeployAllShips()
-printMap(mapPlayer)
-
-
-
-"""
-function to find biggest ship not sunk in Players fleet
-"""
-def findBiggestShipInPlayerFleet():
-    global fleetPlayer # importing global variable
+    Returns:
+        int: The size of the biggest ship in the fleet.
+    """
     biggestShipName = None
     biggestShipSize = 0
-    for ship, details in fleetPlayer.items(): # cycling thorough all ships in players fleet
-        size = details["Size"] # getting size info
-        quantity = details["Quantity"] # getting quontity information
-        if quantity > 0 and size > biggestShipSize: # Check if the quantity of the ship is above zero and if its size is greater than the current biggest ship size
-            biggestShipName = ship
+    # Loop through each ship and its details in the fleet
+    for shipName, shipDetails in fleet.items():
+        size = shipDetails.get("Size", 0)  # Get the size of the ship, default to 0 if "Size" key is not found
+        if size > biggestShipSize:
             biggestShipSize = size
-    return biggestShipName, biggestShipSize
+            biggestShipName = shipName
+    print(f"I have found the biggest ship {biggestShipName} in the fleet with size {biggestShipSize}")
+    return biggestShipSize
 
+def searchMapForBiggestShip(map, shipSize, cpuShootCoordinates):
+    """
+    Search the map for a suitable location to shoot the biggest unsunk ship in the fleet.
 
-"""
-now will search for given ship on Players
-"""
-def searchForPlayerShipAndHit():
-    global mapPlayer, fleetPlayer
-    shipName, shipSize = findBiggestShipInPlayerFleet()
+    Args:
+        map (list): A 2D map to search.
+        shipSize (int): The size of the biggest unsunk ship.
+        cpuShootCoordinates (list): List of CPU's previous shot coordinates.
+
+    Returns:
+        Tuple[int, int]: The coordinates (X, Y) to shoot at.
+    """
     width = shipSize * 2 - 1
-    height = shipSize * 2 -1
-    while coordinates == "noneFound" : # creating loop, if there was no such big pattern found on map for deployed ship, will start making it smaller and keep searching for it till we find one pattern
-        coordinates = searchMap(mapPlayer,width,height) # looking for given ship, so we will make huge square, 2x size of ship and will look for that on map
-        orientation = random.choice("width", "height") # choosing how we will reduce searching block, horizontaly or verticaly
-        if orientation == "width":
-            width = width - 1 # reducing width
-            coordinates = searchMap(mapPlayer,width,height) #searching with lest wide pattern
-            if coordinates == "noneFound":
-                break #if there was no pattern found, now we will swap to height and search again, so we use break to keep searching
+    height = shipSize * 2 - 1
+    coordinates = "noneFound"  # Initialize the coordinates
+
+    while True:  # An outer loop to keep generating new coordinates until unique ones are found
+        while coordinates == "noneFound":  # Keep searching until a pattern is found
+            coordinates = searchMap(map, width, height)  # Search for a pattern
+            if coordinates == "noneFound":  # If no pattern is found
+                orientation = random.choice(["width", "height"])  # Choose an orientation to reduce
+                if orientation == "width":
+                    width -= 1  # Reduce the width
+                elif orientation == "height":
+                    height -= 1  # Reduce the height
+
+                # If reducing either width or height did not work, try reducing both
+                if coordinates == "noneFound":
+                    width -= 1
+                    height -= 1
+
+        shootingCoordinates = random.choice(coordinates)  # Choose a random coordinate
+        coordinatesX, coordinatesY = shootingCoordinates  # Extract X and Y coordinates
+
+        # Calculate the middle of the X and Y coordinates
+        coordinatesX = coordinatesX // 2 + 1 - (random.choice([0, 1]) if coordinatesX % 2 == 1 else 0)
+        coordinatesY = coordinatesY // 2 + 1 - (random.choice([0, 1]) if coordinatesY % 2 == 1 else 0)
+
+        # Check if these coordinates already exist in cpuShootCoordinates
+        if [coordinatesX, coordinatesY] not in cpuShootCoordinates:
+            print(f'I have found the biggest ship still available of size {shipSize} and will select coordinates {coordinatesX} and {coordinatesY}')
+            return coordinatesX, coordinatesY  # Return the coordinates to shoot
         else:
-            height = height - 1 # reducing height
-            width = width + 1 # making width same again, as now will search with lower height
-            coordinates = searchMap(mapPlayer,width,height) # searching again
-            if coordinates == "noneFound":
-                break # we have found again nothing, so breaking 
-        width = width - 1
-        height = height - 1
-    #now we have found coordinates list
-    shootingCoordinates = random.choice(coordinates) # choosing random spot to shoot
-    coordinatesX, coordinatesY = shootingCoordinates.split(',') # getting X and Y where we will be shooting
-    #now we have X, Y, ship width, we will select center of that area if possible
-    coordinatesX = coordinatesX // 2 + 1 - (random.choice([0, 1]) if coordinatesX % 2 == 1 else 0) # now choosing middle of X coordinates, but with random choice, as if X = 5, then it would be 3, but if X = 6, then it can be 3 or 4
-    coordinatesY = coordinatesY // 2 + 1 - (random.choice([0, 1]) if coordinatesY % 2 == 1 else 0) # now choosing middle of X coordinates, but with random choice, as if X = 5, then it would be 3, but if X = 6, then it can be 3 or 4
-    shootCheck(coordinatesX,coordinatesY,mapPlayer,fleetPlayer)
+            coordinates = "noneFound"  # Reset and search again for a unique set of coordinates
 
-    
 
-"""
-function to check if shooting hit ship or not, if hit is it sunken
-"""
-shotInfo = [] #global, where infoormation of shooting will be stored
+def shootCheck(coordX, coordY, map, fleet, actionsLog):
+    """
+    Check if a shooting was successful (hit) or a miss.
 
-def shootCheck(coordX, coordY, map, fleet):
-    global shipSymbols, shotInfo
-    checkCoordinates = [coordX,coordY]
-    shootHit = None # this will be ship name
+    Args:
+        coordX (int): The X coordinate of the shot.
+        coordY (int): The Y coordinate of the shot.
+        map (list): The map where the shooting takes place.
+        fleet (dict): A dictionary containing fleet information.
+        actionsLog (list): A list to log shooting actions.
+
+    Returns:
+        list: The updated actions log.
+    """
+    global shipSymbols  # Declare global variables
+    checkCoordinates = [coordX, coordY]  # Create a list for the coordinates
+    shootHit = None  # Initialize a variable to store the ship name if hit
+    # Initialize a list to store the whole coordinates of the hit ship
     wholeShipCoordinates = []
-    for shipName,shipData in fleet.values():
-        for coordinatesAllShips in shipData["Coordinates"]:
-            if checkCoordinates in coordinatesAllShips: # if it was hit:
-                map[coordX,coordY] = shipSymbols["Hit"][0]
-                shootHit = shipName # storing ship name if hit, so it is not None, what will make next If condition to work
-                wholeShipCoordinates = coordinatesAllShips # storing all coordinates for particular ship
-    if shootHit: # now we know we hit the ship
-        shotInfo.append(["Hit",coordX,coordY]) # storing shooting info
-        for singleCoordinate in wholeShipCoordinates: #checking map if ship is fully sunk after our hit
-            if map[singleCoordinate[0],singleCoordinate[1]] != shipSymbols["Hit"][0]:
-                break # one or more parts of ship is not damaged
-            else: # if there was no break, it means whole ship was sunken !!!
-                shotInfo.clear() # clearing all shooting log for particular ship, as it is sunken
-                shipInfo = fleetRemoveShip(shipName, singleCoordinate, fleet)
-                print(shipInfo + "was sunken")
-    if not shootHit:
-        map[coordX][coordY] = shipSymbols["Miss"][0]
-        shotInfo.append(["Miss",coordX,coordY])
-    return shootHit, shotInfo
 
-"""
-function to remove given ship from fleet
-"""
+    # Loop through all ships in the fleet to get coordinates of all ships
+    for shipName, shipData in fleet.items():
+        # Loop through all coordinates of all ships
+        for coordinatesAllShips in shipData["Coordinates"]:
+            # Check if the shot coordinates match any ship coordinates
+            if checkCoordinates in coordinatesAllShips:
+                map[coordX][coordY] = shipSymbols["Hit"][0]  # Mark the hit on the map
+                shootHit = shipName  # Store the name of the ship if it is there, otherwise it is None
+                wholeShipCoordinates = coordinatesAllShips  # Store all coordinates of the hit ship
+
+    # If a ship was hit
+    if shootHit:
+        actionsLog.append(["Hit", coordX, coordY])  # Log the hit in logActions
+        # Check if the whole ship is sunk
+        for singleCoordinate in wholeShipCoordinates:
+            if map[singleCoordinate[0]][singleCoordinate[1]] != shipSymbols["Hit"][0]:
+                break  # The ship is not fully sunk yet
+        else:
+            actionsLog.clear()  # Clear the actions log for the sunk ship
+            # I assume you have a function to remove the ship from the fleet.
+            shipInfo = fleetRemoveShip(shipName, wholeShipCoordinates, fleet)
+            print(shipInfo + " was sunk")
+
+    # If the shot was a miss
+    if not shootHit:
+        map[coordX][coordY] = shipSymbols["miss"][0]  # Mark the miss on the map
+        actionsLog.append(["Miss", coordX, coordY])  # Log the miss in logActions
+
+    return actionsLog  # Return whether the shot was a hit and the updated actions log
+
+
 def fleetRemoveShip(shipName, coordinates, fleet):
-    removedShipInfo = None  # Initialize to None
+    """
+    Remove a given ship from the fleet.
+
+    Args:
+        shipName (str): The name of the ship to be removed.
+        coordinates (list): The coordinates of the ship to be removed.
+        fleet (dict): A dictionary containing fleet information.
+
+    Returns:
+        dict or None: Information about the removed ship or None if the ship was not found.
+    """
+    # Initialize the variable to store the removed ship's information
+    removedShipInfo = None
+
+    # Check if the ship exists in the fleet
     if shipName in fleet:
+        # Retrieve the ship's data from the fleet
         shipData = fleet[shipName]
-        # Check if the ship has more than one quantity
+
+        # Check if the ship has more than one instance in the fleet
         if shipData["Quantity"] > 1:
+            # Loop through the coordinates of each instance of the ship
             for index, coordinatesFleet in enumerate(shipData["Coordinates"]):
+                # If the given coordinates match
                 if coordinates in coordinatesFleet:
+                    # Remove the coordinates from the ship's data
                     removedCoordinates = shipData["Coordinates"].pop(index)
+                    # Decrease the quantity of this type of ship in the fleet
                     shipData["Quantity"] -= 1
+
+                    # Store the removed ship's information
                     removedShipInfo = {
-                        "ShipName": shipName,
-                        "RemovedCoordinates": removedCoordinates
+                        "shipName": shipName,
+                        "removedCoordinates": removedCoordinates
                     }
+
+                    # If there are no more instances of this type of ship, remove it from the fleet
                     if shipData["Quantity"] == 0:
                         del fleet[shipName]
+
                     break  # Exit the loop after removing the coordinates
         else:
-            # If there is only one ship, remove the entire ship from the fleet
+            # If there is only one instance of the ship, remove it entirely from the fleet
             del fleet[shipName]
+
+            # Store the removed ship's information
             removedShipInfo = {
-                "ShipName": shipName,
-                "RemovedCoordinates": shipData["Coordinates"]
+                "shipName": shipName,
+                "removedCoordinates": shipData["Coordinates"]
             }
-            print("removed ship info" + removedShipInfo)
+
+    # Return the information of the removed ship
     return removedShipInfo
 
 
-"""
-function to check is there any more ships remaining in fleet
-"""
+def cpuMove(fleet, map):
+    """
+    Perform the CPU's move in the game.
+
+    Args:
+        fleet (dict): A dictionary containing fleet information.
+        map (list): The game map.
+
+    Returns:
+        None
+    """
+    global cpuActions, cpuShootCoordinates, gameResult
+
+    while gameResult != "gameOver":
+        if len(cpuActions) == 0:
+            # If there is no stored information about hit ships that are not sunk:
+            biggestShipSize = findBiggestShipInPlayerFleet(fleet)
+            coordX, coordY = searchMapForBiggestShip(map, biggestShipSize, cpuShootCoordinates)
+            cpuShootCoordinates.append([coordX, coordY])
+            cpuActions = shootCheck(coordX, coordY, map, fleet, cpuActions)
+            print(f"CPU's move: Shot at coordinates ({coordX}, {coordY})")
+        else:
+            # If there is stored information about hit ships that are not yet sunk:
+            coordinates = findBestShot(cpuActions)
+            if coordinates:
+                coordX, coordY = coordinates
+                cpuShootCoordinates.append([coordX, coordY])
+                cpuActions = shootCheck(coordX, coordY, map, fleet, cpuActions)
+                print(f"CPU's move: Shot at coordinates ({coordX}, {coordY})")
+
+        gameResult = fleetCheck(fleet)
+
+
 def fleetCheck(fleet):
-    ships_to_remove = []  # List to store ship names with quantity 0
-    # Find ships with quantity 0
-    for ship_name, ship_data in fleet.items():
-        if ship_data["Quantity"] == 0:
-            ships_to_remove.append(ship_name)
-    # Remove ships with quantity 0
-    for ship_name in ships_to_remove:
-        del fleet[ship_name]
-    if not fleet: # if there is nor remaining ships in fleet
-        print("game over")
+    """
+    Check if there are any remaining ships in the fleet.
+
+    Args:
+        fleet (dict): A dictionary containing fleet information.
+
+    Returns:
+        str: The game result, either "gameOver" if there are no remaining ships or None if the game continues.
+    """
+    global gameResult
+
+    # Initialize a list to store the names of ships with a quantity of 0
+    shipsToRemove = []
+
+    # Loop through the fleet to find ships with a quantity of 0
+    for shipName, shipData in fleet.items():
+        if shipData["Quantity"] == 0:
+            shipsToRemove.append(shipName)
+
+    # Loop through the list and remove ships with a quantity of 0 from the fleet
+    for shipName in shipsToRemove:
+        del fleet[shipName]
+
+    # Check if there are no remaining ships in the fleet
+    if not fleet:
+        print("Game over")  # Indicate that the game is over if there are no remaining ships
+        return "gameOver"
 
 
-"""
-function for player to input shoot coordinates
-"""
-def playerShoot(): #function for user to input map size
-    while True:
-        # user will be requested to input map size
-        coordinatesPlayerShoot = input("Please select coordinates X and Y where you would like to shoot. First number - Horizontal, second number - Vertical. Example: 3,6 \n")
-        try: #testing if user used correct pattern to input map size
-            coordX,coordY = coordinatesPlayerShoot.split(',') # splitting user input into 2 separate parts 
-            if coordX.isdigit() and coordY.isdigit(): # checking if both inputs parts are numbers
-                break #now function can stop as all is correct
-            else:  #if any part of inout is not numeric, printing out message
-                print("Invalid input. Please enter two numbers separated by a comma.")
-        except ValueError: #if user input can not be split in 2 parts will raise an issue:
-            print("Invalid input. Please enter two numbers separated by a comma.")
-    return coordX,coordY
+def determineOrientation(hitActions):
+    """
+    Determine the orientation of a hit ship based on hit actions.
+
+    Args:
+        hitActions (list): A list of hit actions containing coordinates.
+
+    Returns:
+        str: The orientation of the hit ship ("Vertical", "Horizontal", or "Unknown").
+    """
+    # If only one hit, orientation is unknown
+    if len(hitActions) == 1:
+        return "Unknown"
+
+    # If multiple hits, determine orientation
+    x_coords = [action[1] for action in hitActions]
+    y_coords = [action[2] for action in hitActions]
+
+    if len(set(x_coords)) == 1:
+        return "Vertical"
+    elif len(set(y_coords)) == 1:
+        return "Horizontal"
+    else:
+        return "Unknown"
+
+
+def findBestShot(cpuActions):
+    """
+    Find the best shot based on CPU actions.
+
+    Args:
+        cpuActions (list): A list of CPU actions, each containing information about hits or misses.
+
+    Returns:
+        tuple: A tuple representing the best shot coordinates (x, y) or None if no suitable shot is found.
+    """
+    # Step 1: Filter out all "Hit" actions
+    hitActions = [action for action in cpuActions if action[0] == "Hit"]
+
+    if not hitActions:
+        return None  # No hits to analyze
+
+    # Step 2: Determine the orientation of the hit ship
+    orientation = determineOrientation(hitActions)
+
+    # Step 3: Calculate probabilities (for now, we'll just find immediate neighbors)
+    candidates = []
+
+    if orientation == "Vertical":
+        min_y = min(action[2] for action in hitActions)
+        max_y = max(action[2] for action in hitActions)
+        x = hitActions[0][1]  # All x-coordinates are the same for a vertical hit
+        candidates.append((x, min_y - 1))  # Add the cell above the first hit
+        candidates.append((x, max_y + 1))  # Add the cell below the last hit
+    elif orientation == "Horizontal":
+        min_x = min(action[1] for action in hitActions)
+        max_x = max(action[1] for action in hitActions)
+        y = hitActions[0][2]  # All y-coordinates are the same for a horizontal hit
+        candidates.append((min_x - 1, y))  # Add the cell to the left of the first hit
+        candidates.append((max_x + 1, y))  # Add the cell to the right of the last hit
+    else:  # Orientation is "Unknown"
+        for x, y in hitActions:
+            candidates.extend([(x-1, y), (x+1, y), (x, y-1), (x, y+1)])  # Add all surrounding cells
+
+    # Step 4: Choose the best shot (for now, we'll just take the first candidate)
+    bestShot = candidates[0]
+    return bestShot
+
+def newGame():
+    global mapCpu, mapCpuHidden, mapPlayer, mapPlayerHidden, FLEET_DEFAULT, fleetCpu, fleetPlayer
+
+    # Uncomment the following lines to allow player adjustments and deployment
+    # while gameAdjust(fleetPlayer):
+    #     pass
+    # playerDeployAllShips()
+
+    # Deploy CPU ships
+    cpuDeployAllShips()
+    printMap(mapCpu)
+
+    result = None
+    while result is None:
+        cpuMove(fleetCpu, mapCpuHidden)  # Start CPU actions
+
+        # Add a condition to end the game when it's over
+        result = fleetCheck(fleetPlayer)
+        if result == "gameOver":
+            print("Game over! CPU wins!")  # You can customize the end message
+            break
+
+# Start a new game
+newGame()
 
