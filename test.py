@@ -1,21 +1,22 @@
-# battleship.py
+# battleship.py test.py - this is code for testing cpu vs cpu game
 
 # Import required libraries
 import random # library to generate random
 import copy # library to make copies of lists and etc, will use function deepcopy
 import os # library to clear terminal
+import re # library to calculate string lengths when printing maps on terminal, so they are aligned
 
 
 # Constants for map dimensions and default symbol
-MAP_WIDTH = 10
-MAP_HEIGHT = 10
+MAP_HEIGHT = 20
+MAP_WIDTH = 20
 DEFAULT_SYMBOL = '0'  # New global variable for the default symbol
 
 # Create maps for CPU and Player
-map_cpu = [[DEFAULT_SYMBOL for _ in range(MAP_HEIGHT)] for _ in range(MAP_WIDTH)]  
-map_cpu_hidden = [[DEFAULT_SYMBOL for _ in range(MAP_HEIGHT)] for _ in range(MAP_WIDTH)]  
-map_player_hidden = [[DEFAULT_SYMBOL for _ in range(MAP_HEIGHT)] for _ in range(MAP_WIDTH)]  
-map_player = [[DEFAULT_SYMBOL for _ in range(MAP_HEIGHT)] for _ in range(MAP_WIDTH)]  
+map_cpu = [[DEFAULT_SYMBOL for _ in range(MAP_WIDTH)] for _ in range(MAP_HEIGHT)]  
+map_cpu_hidden = [[DEFAULT_SYMBOL for _ in range(MAP_WIDTH)] for _ in range(MAP_HEIGHT)]  
+map_player_hidden = [[DEFAULT_SYMBOL for _ in range(MAP_WIDTH)] for _ in range(MAP_HEIGHT)]  
+map_player = [[DEFAULT_SYMBOL for _ in range(MAP_WIDTH)] for _ in range(MAP_HEIGHT)]  
 
 
 # Initialize game-related variables
@@ -129,6 +130,7 @@ def print_map(game_map):
 
 
 
+
 def print_two_maps(map_left, map_right, label_left, label_right, gap=10):
     """
     Print two maps side by side with labels and a customizable gap.
@@ -139,37 +141,69 @@ def print_two_maps(map_left, map_right, label_left, label_right, gap=10):
         label_right (str): Label for the second map.
         gap (int): Number of blank spaces between the two maps. Default is 10.
     """
+    # Calculate the width of a single character (assuming monospaced font)
+    char_width = len("X")
+    # Calculate the number of digits in the dimensions for proper alignment
+    num_digits_map_width = len(str(len(map_left[0]))) # number of symbol to represent index, like 3 - 1 symbol, 13 - 2 symbols
+    num_digits_map_height = len(str(len(map_left)))
+    print(" num_digits_map_width", num_digits_map_width)
+    print("num_digits_map_height", num_digits_map_height)
     # Create a string of blank spaces based on the gap argument
-    gap_str = ' ' * gap
-    # Print labels
-    label_left_centered = label_left.center(len(map_left[0]) * 3)
-    label_right_centered = label_right.center(len(map_right[0]) * 3)
-    print(f"{label_left_centered}{gap_str}{label_right_centered}")
-    # Print column numbers
-    print("    ", end="")
-    for col_index in enumerate(map_left[0]):
-        print(f"{col_index[0]}  ", end="")
-    print(gap_str, end="")
-    print("    ", end="")
-    for col_index in enumerate(map_right[0]):
-        print(f"{col_index[0]}  ", end="")
+    gap_str = ' ' * gap # this will be a gap between maps
+    # maps needs to be offset to side, so they align with indexes of rows
+    # when printing table, index of row from table data will be separated by " | " - 3 digits, based on that now calculating how much label has to be offset to side
+    row_index_separator = " | " # this will be separator between row column index and table
+    print_map_left_offset = " " * (num_digits_map_height + len(row_index_separator)) # this will be an offset to side of map, based on indexes of rows (how many symbols is in index)
+    # we will use same variable for left and right table, as both of them are same width
+    # Labels are centered to align them with the maps
+    number_char_table_total = (len(map_left[0]) * (num_digits_map_width + char_width + 1)) # calculating how many characters there will be in total per table width
+    label_left_centered = label_left.center(number_char_table_total) # centering left label
+    label_right_centered = label_right.center(number_char_table_total) # centering right label
+    print(f"{print_map_left_offset}{label_left_centered}{gap_str}{print_map_left_offset} {label_right_centered}")
+    # This step prints column indices with appropriate spacing to align them with the maps
+    print(print_map_left_offset,end=" ")
+    for col_index in range(len(map_left[0])):
+        if col_index == len(map_left[0]) - 1:  # Check if it's the last column index
+            print(f"{col_index}".rjust(num_digits_map_height + char_width), end="") # i do not want gap after last index, as it will be not aligned
+        else:
+            print(f"{col_index}".rjust(num_digits_map_height + char_width), end=" ")
+    print(gap_str, print_map_left_offset,end=" ")
+    for col_index in range(len(map_right[0])):
+        # Right-justify the column index with proper spacing
+        print(f"{col_index}".rjust(num_digits_map_height + char_width), end=" ")
     print()
-    # Print separator line
-    print("   " + "=" * (len(map_left[0]) * 3), end=gap_str)
-    print("    ", end="")
-    print("=" * (len(map_right[0]) * 3))
-    # Print map rows
+    # Print the horizontal separator line
+    # This step prints a separator line to visually separate the maps
+    separator_length_left = len(map_left[0]) * (num_digits_map_width + char_width + 1)
+    separator_length_right = len(map_right[0]) * (num_digits_map_width + char_width + 1)
+    print(print_map_left_offset + "=" * separator_length_left, end=gap_str)
+    print(" " + print_map_left_offset + "=" * separator_length_right)
+    # Loop through each row and print the map values
     for row_index, (row_left, row_right) in enumerate(zip(map_left, map_right)):
-        # Print row for map_left
-        print(f"{row_index} |", end=" ")
+        # Print row for the left map
+        print(f"{row_index}".rjust(num_digits_map_width + 1), end=row_index_separator)
         for value in row_left:
-            print(f"{value}  ", end="")
-        print(gap_str, end="")  # Gap between the two maps
-        # Print row for map_right
-        print(f"{row_index} |", end=" ")
+            width = len(str(value))
+            # Right-justify the map value with proper spacing
+            print(f"{value}".rjust(num_digits_map_height + char_width - (char_width - width)), end=" ")
+        # Insert the gap between the two maps
+        print(gap_str, end="")
+        
+        # Print row for the right map
+        print(f"{row_index}".rjust(num_digits_map_width + 1), end=row_index_separator)
         for value in row_right:
-            print(f"{value}  ", end="")
-        print()  # Move to the next line
+            width = len(str(value))
+            # Right-justify the map value with proper spacing
+            print(f"{value}".rjust(num_digits_map_height  + char_width - (char_width - width)), end=" ")
+        
+        # Move to the next line
+        print()
+
+
+
+
+
+
 
 
 
@@ -228,14 +262,14 @@ def search_map_for_pattern(map, width, height):
     # Get the default symbol from the global constant
     symbol = DEFAULT_SYMBOL
     # Get the dimensions of the map
-    map_height, map_width = len(map), len(map[0])
+    MAP_WIDTH, MAP_HEIGHT = len(map), len(map[0])
     # Initialize an empty list to store the coordinates where the pattern matches
     coordinates = []
     # Create the pattern using list comprehension
     pattern = [[symbol] * width for _ in range(height)]
     # Loop through the map to search for the pattern
-    for row in range(map_height - height + 1):
-        for col in range(map_width - width + 1):
+    for row in range(MAP_WIDTH - height + 1):
+        for col in range(MAP_HEIGHT - width + 1):
             # Check if the pattern matches at the current coordinates
             if all(
                 map[row + i][col + j] == pattern[i][j]
@@ -260,7 +294,7 @@ def cpu_deploy_all_ships():
     """
     global fleet_cpu, DEFAULT_FLEET, map_cpu, DEFAULT_SYMBOL  # Declare global variables
     # Initialize map_cpu with DEFAULT_SYMBOL, if not already done
-    map_cpu = initialize_maps(MAP_WIDTH, MAP_HEIGHT)
+    map_cpu = initialize_maps(MAP_HEIGHT, MAP_WIDTH)
     # Make a fresh copy of the fleet, in case there were any changes
     # made for map size or fleet
     fleet_cpu = copy.deepcopy(DEFAULT_FLEET)
@@ -279,53 +313,6 @@ def cpu_deploy_all_ships():
                 location = random.choice(search_map_for_pattern(map_cpu, 1, size))
             print(alignment)
             map_show_ship_or_symbols(map_cpu, size, location, alignment, ship_name, fleet_cpu)
-
-
-def player_deploy_all_ships():
-    """Deploy all player ships on the map.
-    Updates:
-        - Global variables fleet_player, DEFAULT_FLEET, map_player
-    Returns:
-        list: The player's map with deployed ships.
-    """
-    global fleet_player, DEFAULT_FLEET, map_player, DEFAULT_SYMBOL  # Declare global variables
-    # Initialize map_player with DEFAULT_SYMBOL, if not already done
-    map_player = initialize_maps(MAP_WIDTH, MAP_HEIGHT)
-    # Make a fresh copy of the fleet, in case there were any changes
-    # made for map size or fleet
-    fleet_player = copy.deepcopy(DEFAULT_FLEET)
-    for ship_name, ship_info in fleet_player.items():
-        quantity = ship_info["Quantity"]
-        size = ship_info["Size"]
-        for i in range(quantity):
-            print_map(map_player)
-            print(f"Now you will be deploying ship {ship_name} NO: {i + 1} of a total {quantity} of this type of ships.")
-            while True:  # Loop to keep asking the user to input correct information to deploy a ship
-                random_x = random.randint(0, len(map_player) - 1)
-                random_y = random.randint(0, len(map_player[0]) - 1)
-                random_alignment = random.choice(['H', 'V'])
-                user_ship_input = input(
-                    f"Please choose coordinates where you would like to deploy your ship, also the ship alignment and its size. (Column, Row, alignment) Example: {random_x},{random_y},{random_alignment}: ")
-                if not check_ship_input(user_ship_input):
-                    continue
-                x, y, align = user_ship_input.split(',')
-                x = int(x)  # Convert to integer
-                y = int(y)  # Convert to integer
-                if size == 1:
-                    alignment = "Single"
-                else:
-                    if align == "V":
-                        alignment = "Vertical"
-                    elif align == "H":
-                        alignment = "Horizontal"                
-                if not check_coordinates(x, y, map_player):
-                    continue
-                elif not input_ship_check(x, y, alignment, map_player, size):
-                    continue
-                location = [x, y]
-                map_show_ship_or_symbols(map_player, size, location, alignment, ship_name, fleet_player)
-                break  # Successfully deployed the ship, so exit the loop
-    return map_player
 
 
 def find_biggest_ship_in_fleet(fleet):
@@ -474,9 +461,11 @@ def detect_ship_orientation(coordinates_list):
 
 
 
-
+clear_terminal()
 cpu_deploy_all_ships()
-print_map(map_cpu)
+print_two_maps(map_cpu_hidden, map_cpu,"hidfdwfwefwdden","actuawefweewfl")
+#print_two_maps(map_cpu, map_cpu_hidden,"hidden","actual")
+
 print("learning")
 def test():
     global fleet_cpu, map_cpu_hidden
@@ -486,11 +475,10 @@ def test():
     print(ship_name, ship_size)
     print (tomasx, tomasy)
 
-test()
+#test()
 print("finished")
 print(fleet_cpu)
 
-print_two_maps(map_cpu_hidden, map_cpu,"hidden","actual")
 
 
 
