@@ -128,52 +128,55 @@ def print_map(game_map):
         print()
 
 
-def print_two_maps(map_left, map_right, label_left, label_right):
+
+def print_two_maps(map_left, map_right, label_left, label_right, gap=10):
     """
-    Print two maps side by side with labels.
-    
+    Print two maps side by side with labels and a customizable gap.
     Args:
         map_left (list): The first 2D list representing a map.
         map_right (list): The second 2D list representing another map.
         label_left (str): Label for the first map.
         label_right (str): Label for the second map.
+        gap (int): Number of blank spaces between the two maps. Default is 10.
     """
+    # Create a string of blank spaces based on the gap argument
+    gap_str = ' ' * gap
     # Print labels
     label_left_centered = label_left.center(len(map_left[0]) * 3)
     label_right_centered = label_right.center(len(map_right[0]) * 3)
-    print(f"{label_left_centered}    {label_right_centered}")
-    
+    print(f"{label_left_centered}{gap_str}{label_right_centered}")
     # Print column numbers
-    print("   ", end="")
-    for col_index in range(len(map_left[0])):
-        print(f"{col_index}  ", end="")
     print("    ", end="")
-    for col_index in range(len(map_right[0])):
-        print(f"{col_index}  ", end="")
+    for col_index in enumerate(map_left[0]):
+        print(f"{col_index[0]}  ", end="")
+    print(gap_str, end="")
+    print("    ", end="")
+    for col_index in enumerate(map_right[0]):
+        print(f"{col_index[0]}  ", end="")
     print()
-    
     # Print separator line
-    print("   " + "=" * (len(map_left[0]) * 3), end="    ")
+    print("   " + "=" * (len(map_left[0]) * 3), end=gap_str)
+    print("    ", end="")
     print("=" * (len(map_right[0]) * 3))
-    
     # Print map rows
-    for row_index in range(len(map_left)):
+    for row_index, (row_left, row_right) in enumerate(zip(map_left, map_right)):
         # Print row for map_left
         print(f"{row_index} |", end=" ")
-        for value in map_left[row_index]:
+        for value in row_left:
             print(f"{value}  ", end="")
-        
-        print("    ", end="")  # Gap between the two maps
-        
+        print(gap_str, end="")  # Gap between the two maps
         # Print row for map_right
         print(f"{row_index} |", end=" ")
-        for value in map_right[row_index]:
+        for value in row_right:
             print(f"{value}  ", end="")
         print()  # Move to the next line
 
 
 
-def map_map_show_ship_or_symbols(game_map, length, coordinates, alignment, ship_name, fleet):
+
+
+
+def map_show_ship_or_symbols(game_map, length, coordinates, alignment, ship_name, fleet):
     """Deploy a single ship on the map. This function will be used when deploying player ships, CPU. Also when revealing sunken ship for both players
     Args:
         game_map (list): A 2D map.
@@ -275,7 +278,7 @@ def cpu_deploy_all_ships():
             elif alignment == "Vertical":
                 location = random.choice(search_map_for_pattern(map_cpu, 1, size))
             print(alignment)
-            map_map_show_ship_or_symbols(map_cpu, size, location, alignment, ship_name, fleet_cpu)
+            map_show_ship_or_symbols(map_cpu, size, location, alignment, ship_name, fleet_cpu)
 
 
 def player_deploy_all_ships():
@@ -320,7 +323,7 @@ def player_deploy_all_ships():
                 elif not input_ship_check(x, y, alignment, map_player, size):
                     continue
                 location = [x, y]
-                map_map_show_ship_or_symbols(map_player, size, location, alignment, ship_name, fleet_player)
+                map_show_ship_or_symbols(map_player, size, location, alignment, ship_name, fleet_player)
                 break  # Successfully deployed the ship, so exit the loop
     return map_player
 
@@ -474,7 +477,7 @@ def detect_ship_orientation(coordinates_list):
 
 cpu_deploy_all_ships()
 print_map(map_cpu)
-print("mokomes")
+print("learning")
 def test():
     global fleet_cpu, map_cpu_hidden
     ship_name, ship_size = find_biggest_ship_in_fleet(fleet_cpu) # searching for biggest ship in fleet
@@ -484,7 +487,7 @@ def test():
     print (tomasx, tomasy)
 
 test()
-print("baigta")
+print("finished")
 print(fleet_cpu)
 
 print_two_maps(map_cpu_hidden, map_cpu,"hidden","actual")
