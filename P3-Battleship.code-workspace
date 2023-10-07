@@ -8,5 +8,11 @@
 			"name": "love-sandwiches-",
 			"path": "../Tomosius/love-sandwiches-"
 		}
-	]
+	],
+	"settings": {
+		"[python]": {
+			"editor.defaultFormatter": "ms-python.autopep8"
+		},
+		"python.formatting.provider": "none"
+	}
 }

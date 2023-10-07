@@ -4,26 +4,26 @@
 import random # library to generate random
 import copy # library to make copies of lists and etc, will use function deepcopy
 import os # library to clear terminal
-import re # library to calculate string lengths when printing maps on terminal, so they are aligned
+import time # importing time library for logging game actions
 
 
 # Constants for map dimensions and default symbol
-MAP_HEIGHT = 20
-MAP_WIDTH = 20
+MAP_HEIGHT = 10
+MAP_WIDTH = 10
 DEFAULT_SYMBOL = '0'  # New global variable for the default symbol
 
 # Create maps for CPU and Player
-map_cpu = [[DEFAULT_SYMBOL for _ in range(MAP_WIDTH)] for _ in range(MAP_HEIGHT)]  
+map_cpu_display = [[DEFAULT_SYMBOL for _ in range(MAP_WIDTH)] for _ in range(MAP_HEIGHT)]  
 map_cpu_hidden = [[DEFAULT_SYMBOL for _ in range(MAP_WIDTH)] for _ in range(MAP_HEIGHT)]  
 map_player_hidden = [[DEFAULT_SYMBOL for _ in range(MAP_WIDTH)] for _ in range(MAP_HEIGHT)]  
 map_player = [[DEFAULT_SYMBOL for _ in range(MAP_WIDTH)] for _ in range(MAP_HEIGHT)]  
 
 
 # Initialize game-related variables
+start_time = None # tamer will start with game 
 game_result = None  # Store the game result (win, lose, or draw)
-cpu_actions = []  # List to store CPU actions (shots, hit/miss, coordinates)
-player_actions = []  # List to store Player actions (shots)
-cpu_shoot_coordinates_log = [["x","y"]]  # List to store CPU's shot coordinates
+cpu_shot_log_tmp = []  # List to store CPU actions (coordinates) if HIT
+game_actions_log = [["player or CPU", "time", "x","y", "action outcome"]]  # List to store CPU's shot coordinates
 
 
 def clear_terminal():
@@ -34,35 +34,39 @@ def clear_terminal():
         os.system('cls')
 
 
-def initialize_maps(width, height):
-    """Initialize a 2D map with zeros.
+
+
+def initialize_maps(width, height, default_symbol):
+    print()
+    print(" initializing function: initialize_maps")
+    """Initialize a 2D map with a default symbol.
+    
     Args:
         width (int): The width of the map.
         height (int): The height of the map.
+        default_symbol (str): The default symbol to populate the map.
+    
     Returns:
-        list: A 2D list filled with zeros.
+        list: A 2D list filled with the default symbol.
     """
-    global DEFAULT_SYMBOL  # Declare global variable
-    return [[DEFAULT_SYMBOL for _ in range(height)] for _ in range(width)]
+    return [[default_symbol for _ in range(height)] for _ in range(width)]
+
 
 
 # Default settings for the fleet
 DEFAULT_FLEET = {
     "AircraftCarrier": {"Size": 5, "Quantity": 1, "Coordinates": []},
     "Battleship": {"Size": 4, "Quantity": 3, "Coordinates": []},
-    "Cruiser": {"Size": 3, "Quantity": 0, "Coordinates": []},
-    "Submarine": {"Size": 3, "Quantity": 0, "Coordinates": []},
-    "Destroyer": {"Size": 2, "Quantity": 0, "Coordinates": []},
+    "Cruiser": {"Size": 3, "Quantity": 1, "Coordinates": []},
+    "Submarine": {"Size": 3, "Quantity": 2, "Coordinates": []},
+    "Destroyer": {"Size": 2, "Quantity": 3, "Coordinates": []},
     "DingyBoat": {"Size": 1, "Quantity": 4, "Coordinates": []}
 }
-
-# Create copies of default fleet settings for CPU and Player
-fleet_cpu = copy.deepcopy(DEFAULT_FLEET)  # Copy for CPU
-fleet_player = copy.deepcopy(DEFAULT_FLEET)  # Copy for Player
 
 
 def print_fleet(fleet):
     """Print the fleet information in a formatted manner.
+    
     Args:
         fleet (dict): Dictionary containing fleet information.
     """
@@ -72,19 +76,21 @@ def print_fleet(fleet):
     for ship, ship_details in fleet.items():
         size = ship_details["Size"]
         quantity = ship_details["Quantity"]
-        coordinates = ship_details["Coordinates"]
+        coordinates = str(ship_details["Coordinates"])  # Convert the list to a string
         print("{:<20} {:<10} {:<10} {:<50}".format(
             ship, size, quantity, coordinates))
 
 
+
+
 # Define color dictionary
 COLORS = {
-    "DarkYellow": "\u001b[33m",
-    "DarkBlue": "\u001b[34m",
-    "DarkGreen": "\u001b[32m",
-    "DarkRed": "\u001b[31m",
-    "LightGray": "\u001b[37m",
-    "Reset": "\u001b[0m",
+    "DarkYellow": "\u001b[33m", # Single cell ship
+    "DarkBlue": "\u001b[34m", # Horizontal ship
+    "DarkGreen": "\u001b[32m", # Vertical ship
+    "DarkRed": "\u001b[31m", # Damaged or Sunk ship
+    "LightGray": "\u001b[37m", # Miss
+    "Reset": "\u001b[0m", # Reset ANSI escape code in string
 }
 
 
@@ -92,23 +98,23 @@ COLORS = {
 SHIP_SYMBOLS = {
     "Single": [COLORS["DarkYellow"] + chr(0x25C6) + COLORS["Reset"]],
     "Horizontal": [
-        [COLORS["DarkBlue"] + chr(0x25C0) + COLORS["Reset"]],
-        [COLORS["DarkBlue"] + chr(0x25A4) + COLORS["Reset"]]
+        COLORS["DarkBlue"] + chr(0x25C0) + COLORS["Reset"],
+        COLORS["DarkBlue"] + chr(0x25A4) + COLORS["Reset"]
     ],
     "Vertical": [
-        [COLORS["DarkGreen"] + chr(0x25B2) + COLORS["Reset"]],
-        [COLORS["DarkGreen"] + chr(0x25A5) + COLORS["Reset"]]
+        COLORS["DarkGreen"] + chr(0x25B2) + COLORS["Reset"],
+        COLORS["DarkGreen"] + chr(0x25A5) + COLORS["Reset"]
     ],
     "Hit": [COLORS["DarkRed"] + chr(0x25A6) + COLORS["Reset"]],
     "Miss": [COLORS["LightGray"] + chr(0x2022) + COLORS["Reset"]],
     "SingleSunk": [COLORS["DarkRed"] + chr(0x25C6) + COLORS["Reset"]],
     "HorizontalSunk": [
-        [COLORS["DarkRed"] + chr(0x25C0) + COLORS["Reset"]],
-        [COLORS["DarkRed"] + chr(0x25A4) + COLORS["Reset"]]
+        COLORS["DarkRed"] + chr(0x25C0) + COLORS["Reset"],
+        COLORS["DarkRed"] + chr(0x25A4) + COLORS["Reset"]
     ],
     "VerticalSunk": [
-        [COLORS["DarkRed"] + chr(0x25B2) + COLORS["Reset"]],
-        [COLORS["DarkRed"] + chr(0x25A5) + COLORS["Reset"]]
+        COLORS["DarkRed"] + chr(0x25B2) + COLORS["Reset"],
+        COLORS["DarkRed"] + chr(0x25A5) + COLORS["Reset"]
     ],
 }
 
@@ -188,37 +194,30 @@ def print_two_maps(map_left, map_right, label_left, label_right, gap=10):
             print(f"{value}".rjust(num_digits_map_height + char_width - (char_width - width)), end=" ")
         # Insert the gap between the two maps
         print(gap_str, end="")
-        
         # Print row for the right map
         print(f"{row_index}".rjust(num_digits_map_width + 1), end=row_index_separator)
         for value in row_right:
             width = len(str(value))
             # Right-justify the map value with proper spacing
             print(f"{value}".rjust(num_digits_map_height  + char_width - (char_width - width)), end=" ")
-        
         # Move to the next line
         print()
 
 
-
-
-
-
-
-
-
-
-
-
 def map_show_ship_or_symbols(game_map, length, coordinates, alignment, ship_name, fleet):
-    """Deploy a single ship on the map. This function will be used when deploying player ships, CPU. Also when revealing sunken ship for both players
+    print()
+    print("initializing function map_show_ship_or_symbols")
+    """Deploy a single ship on the map.
+
     Args:
         game_map (list): A 2D map.
         length (int): Length of the ship.
-        location (list): Coordinates [row, column] where the ship will be deployed.
+        coordinates (list): Coordinates [row, column] where the ship will be deployed.
         alignment (str): Ship alignment ("H" for horizontal, "V" for vertical).
         ship_name (str): Name of the ship.
         fleet (dict): Dictionary containing fleet information.
+        SHIP_SYMBOLS (dict): Dictionary containing ship symbols.
+        
     Returns:
         list: Updated map with the deployed ship.
     """
@@ -228,28 +227,27 @@ def map_show_ship_or_symbols(game_map, length, coordinates, alignment, ship_name
     if length == 1:
         game_map[row][column] = SHIP_SYMBOLS[alignment][0]
         ship_coordinates.append([row, column])
-        return game_map
     else:
         if alignment == "Horizontal":
             ship_coordinates.append([row, column])
-            game_map[row][column] = SHIP_SYMBOLS[alignment][0][0]
+            game_map[row][column] = SHIP_SYMBOLS[alignment][0]
             for i in range(length - 1):
-                game_map[row][column + i + 1] = SHIP_SYMBOLS[alignment][1][0]
+                game_map[row][column + i + 1] = SHIP_SYMBOLS[alignment][1]
                 ship_coordinates.append([row, column + i + 1])
         elif alignment == "Vertical":
             ship_coordinates.append([row, column])
-            game_map[row][column] = SHIP_SYMBOLS[alignment][0][0]
+            game_map[row][column] = SHIP_SYMBOLS[alignment][0]
             for i in range(length - 1):
-                game_map[row + i + 1][column ] = SHIP_SYMBOLS[alignment][1][0]
+                game_map[row + i + 1][column] = SHIP_SYMBOLS[alignment][1]
                 ship_coordinates.append([row + i + 1, column])
     fleet[ship_name]["Coordinates"].append(ship_coordinates)
-    print_map(game_map)
     print(f"Deployed {ship_name} at Coordinates: {coordinates}")
     return game_map
 
 
-
 def search_map_for_pattern(map, width, height):
+    print()
+    print("initializing function search_map_for_pattern")
     """
     Find all occurrences of a pattern in a map and return their coordinates.
     Args:
@@ -257,46 +255,51 @@ def search_map_for_pattern(map, width, height):
     - width (int): Width of the pattern.
     - height (int): Height of the pattern.
     Returns:
-    List[Tuple[int, int]]: A list of coordinate tuples (row, col) where the pattern is found.
+    List[int, int]: A list of coordinate [row, col] where the pattern is found.
     """
     # Get the default symbol from the global constant
-    symbol = DEFAULT_SYMBOL
+    global DEFAULT_SYMBOL
     # Get the dimensions of the map
-    MAP_WIDTH, MAP_HEIGHT = len(map), len(map[0])
+    map_height = len(map)
+    map_width = len(map[0])
     # Initialize an empty list to store the coordinates where the pattern matches
     coordinates = []
     # Create the pattern using list comprehension
-    pattern = [[symbol] * width for _ in range(height)]
+    pattern = [[DEFAULT_SYMBOL] * width for _ in range(height)]
     # Loop through the map to search for the pattern
-    for row in range(MAP_WIDTH - height + 1):
-        for col in range(MAP_HEIGHT - width + 1):
-            # Check if the pattern matches at the current coordinates
-            if all(
-                map[row + i][col + j] == pattern[i][j]
-                for i in range(height)
-                for j in range(width)
-            ):
+
+    for row in range(map_height - height + 1):
+        for col in range(map_width - width + 1):
+            pattern_matches = True
+            for i in range(height):
+                for j in range(width):
+                    if map[row + i][col + j] != pattern[i][j]:
+                        pattern_matches = False
+                        break
+                if not pattern_matches:
+                    break
+            if pattern_matches:
                 # If the pattern matches, add the coordinates to the list
                 coordinates.append([row, col])
     # Return "noneFound" if no matching coordinates were found
     if not coordinates:
         return "noneFound"
+    print(" found coordinates: ", coordinates)
     return coordinates
 
-
-
 def cpu_deploy_all_ships():
+    print()
+    print("initializing function cpu_deploy_all_ships")
     """Deploy all CPU ships on the map.
     Updates:
-        - Global variables fleet_cpu, DEFAULT_FLEET, map_cpu
+        - Global variables fleet_cpu, DEFAULT_FLEET, map_cpu_display
     Returns:
         None
     """
-    global fleet_cpu, DEFAULT_FLEET, map_cpu, DEFAULT_SYMBOL  # Declare global variables
-    # Initialize map_cpu with DEFAULT_SYMBOL, if not already done
-    map_cpu = initialize_maps(MAP_HEIGHT, MAP_WIDTH)
+    global fleet_cpu, DEFAULT_FLEET, map_cpu_display, DEFAULT_SYMBOL, SHIP_SYMBOLS # Declare global variables
+    # Initialize map_cpu_display with DEFAULT_SYMBOL, if not already done
+    map_cpu_display = initialize_maps(MAP_HEIGHT, MAP_WIDTH, DEFAULT_SYMBOL)
     # Make a fresh copy of the fleet, in case there were any changes
-    # made for map size or fleet
     fleet_cpu = copy.deepcopy(DEFAULT_FLEET)
     for ship_name, ship_info in fleet_cpu.items():
         quantity = ship_info["Quantity"]
@@ -305,17 +308,20 @@ def cpu_deploy_all_ships():
         for i in range(quantity):
             if size == 1:
                 alignment = "Single"
+                location = random.choice(search_map_for_pattern(map_cpu_display, 1, 1))
             else:
                 alignment = random.choice(["Horizontal", "Vertical"])  # Horizontal or vertical
-            if alignment == "Horizontal":
-                location = random.choice(search_map_for_pattern(map_cpu, size, 1))
-            elif alignment == "Vertical":
-                location = random.choice(search_map_for_pattern(map_cpu, 1, size))
+                if alignment == "Horizontal":
+                    location = random.choice(search_map_for_pattern(map_cpu_display, size, 1))
+                elif alignment == "Vertical":
+                    location = random.choice(search_map_for_pattern(map_cpu_display, 1, size))
             print(alignment)
-            map_show_ship_or_symbols(map_cpu, size, location, alignment, ship_name, fleet_cpu)
+            map_show_ship_or_symbols(map_cpu_display, size, location, alignment, ship_name, fleet_cpu)
 
 
 def find_biggest_ship_in_fleet(fleet):
+    print()
+    print("initializing function find_biggest_ship_in_fleet")
     """
     Find the biggest ship in the fleet by size.
     Args:
@@ -329,27 +335,13 @@ def find_biggest_ship_in_fleet(fleet):
         return None  # No ships with quantity > 0
     biggest_ship = max(available_ships, key=lambda ship: available_ships[ship]["Size"])
     biggest_ship_size = available_ships[biggest_ship]["Size"]
+    print("biggest_ship, biggest_ship_size", biggest_ship, biggest_ship_size)
     return biggest_ship, biggest_ship_size
 
 
-def remove_coordinates_from_list(A, B):
-    """
-    Remove coordinates from list A if they are also present in list B.
-    This function will be used to check, if there was previously made shot to those coordinates. will be needed for CPU and Player
-    Args:
-        A (List[List[int]]): The first nested list of coordinates.
-        B (List[List[int]]): The second nested list of coordinates.
-    Returns:
-        List[List[int]]: List A with coordinates removed if they are present in list B.
-    """
-    # Create a set of coordinates from list B for faster lookup
-    coordinates_set_B = set(tuple(coord) for coord in B)
-    # Filter list A to keep only coordinates not present in list B
-    filtered_A = [coord for coord in A if tuple(coord) not in coordinates_set_B]
-    return filtered_A
-
-
 def cpu_choose_shooting_coordinates_biggest_ship(fleet_to_search, map_to_search):
+    print()
+    print("initializing function cpu_choose_shooting_coordinates_biggest_ship")
     """
     Choose shooting coordinates for the CPU based on the biggest ship in the fleet.
     Args:
@@ -358,7 +350,7 @@ def cpu_choose_shooting_coordinates_biggest_ship(fleet_to_search, map_to_search)
     Returns:
         The chosen shooting coordinates (coordinateX, coordinateY).
     """
-    global cpu_actions, cpu_shoot_coordinates_log, DEFAULT_SYMBOL
+    global cpu_shot_log_tmp, DEFAULT_SYMBOL
     ship_name, ship_size = find_biggest_ship_in_fleet(fleet_to_search) # searching for biggest ship in fleet
     if ship_name is  None:
         print("game over print") # need to create function game over
@@ -367,9 +359,8 @@ def cpu_choose_shooting_coordinates_biggest_ship(fleet_to_search, map_to_search)
         height = ship_size * 2 - 1
         while True:
             coordinates = search_map_for_pattern(map_to_search, width, height) # getting list of possible coordinates
-            checked_coordinates = remove_coordinates_from_list(coordinates, cpu_shoot_coordinates_log) # removing any coordinates from coordinates list, if they were previously used
-            if checked_coordinates: # if there is any coordinates in list, we will choose one random
-                chosen_coordinates = random.choice(checked_coordinates) # choosing coordinates using random
+            if coordinates: # if there is any coordinates in list, we will choose one random
+                chosen_coordinates = random.choice(coordinates) # choosing coordinates using random
                 break
             else: # if there was no coordinates in list, we will reduce width or height and search map again and again
                 reduce = random.choice(["width", "height"]) #choosing randomly, what to reduce for searching
@@ -377,17 +368,15 @@ def cpu_choose_shooting_coordinates_biggest_ship(fleet_to_search, map_to_search)
                     width = width - 1
                     height = height
                     coordinates = search_map_for_pattern(map_to_search, width, height) # getting list of possible coordinates
-                    checked_coordinates = remove_coordinates_from_list(coordinates, cpu_shoot_coordinates_log) # removing any coordinates from coordinates list, if they were previously used
-                    if checked_coordinates: # if there is any coordinates in list, we will choose one random
-                        chosen_coordinates = random.choice(checked_coordinates) # choosing coordinates using random
+                    if coordinates: # if there is any coordinates in list, we will choose one random
+                        chosen_coordinates = random.choice(coordinates) # choosing coordinates using random
                         break
                     else: # if there was no coordinates found with reduced width, we will restore width and search with reduced height
                         width = width + 1
                         height = height - 1
                         coordinates = search_map_for_pattern(map_to_search, width, height) # getting list of possible coordinates
-                        checked_coordinates = remove_coordinates_from_list(coordinates, cpu_shoot_coordinates_log) # removing any coordinates from coordinates list, if they were previously used
-                        if checked_coordinates: # if there is any coordinates in list, we will choose one random
-                            chosen_coordinates = random.choice(checked_coordinates) # choosing coordinates using random
+                        if coordinates: # if there is any coordinates in list, we will choose one random
+                            chosen_coordinates = random.choice(coordinates) # choosing coordinates using random
                             break
                         else: #reducing width and height and try loop again
                             width = width -1 
@@ -396,17 +385,15 @@ def cpu_choose_shooting_coordinates_biggest_ship(fleet_to_search, map_to_search)
                     width = width
                     height = height - 1
                     coordinates = search_map_for_pattern(map_to_search, width, height) # getting list of possible coordinates
-                    checked_coordinates = remove_coordinates_from_list(coordinates, cpu_shoot_coordinates_log) # removing any coordinates from coordinates list, if they were previously used
-                    if checked_coordinates: # if there is any coordinates in list, we will choose one random
-                        chosen_coordinates = random.choice(checked_coordinates) # choosing coordinates using random
+                    if coordinates: # if there is any coordinates in list, we will choose one random
+                        chosen_coordinates = random.choice(coordinates) # choosing coordinates using random
                         break
                     else: # if there was no coordinates found with reduced width, we will restore height and search with reduced width
                         width = width -1
                         height = height + 1
                         coordinates = search_map_for_pattern(map_to_search, width, height) # getting list of possible coordinates
-                        checked_coordinates = remove_coordinates_from_list(coordinates, cpu_shoot_coordinates_log) # removing any coordinates from coordinates list, if they were previously used
-                        if checked_coordinates: # if there is any coordinates in list, we will choose one random
-                            chosen_coordinates = random.choice(checked_coordinates) # choosing coordinates using random
+                        if coordinates: # if there is any coordinates in list, we will choose one random
+                            chosen_coordinates = random.choice(coordinates) # choosing coordinates using random
                             break
                         else: #reducing width and height and try loop again
                             width = width - 1 
@@ -415,73 +402,423 @@ def cpu_choose_shooting_coordinates_biggest_ship(fleet_to_search, map_to_search)
         coord_x, coord_y = chosen_coordinates # now we know coordinates last pattern was used, so based on that, we will take sweet spot - center of pattern and shoot
         coordinate_x = coord_x + width // 2 + random.choice([0,width % 2])
         coordinate_y = coord_y + height // 2 + random.choice([0,height % 2])
+    print("coordinate_x, coordinate_y", coordinate_x, coordinate_y)
     return coordinate_x, coordinate_y
 
 
-def find_ship_and_coordinates(fleet, coordinates):
+
+def action_perform_shoot(player, x, y, map_hidden, map_display, fleet):
+    print()
+    print("initializing function action_perform_shoot")
+    print("shooting at coordinates x y:", x, y)
     """
-    Find the ship name, ship size, and the list ID of coordinates to which the target_coordinates belong.
+    Perform a shooting action on the game board.
+    
+    Parameters:
+    - player (str): The player making the shot ("CPU" or "Human").
+    - x (int): The x-coordinate of the shot.
+    - y (int): The y-coordinate of the shot.
+    - map_hidden (list): The hidden map that tracks shots.
+    - map_display (list): The displayed map that shows ships.
+    - fleet (dict): Information about the fleet of ships.
+    - game_actions_log (list): Log of game actions.
+    - start_time (float): The game start time for logging.
+    - SHIP_SYMBOLS (dict): Symbols used for different states of the ship.
+    
+    Returns:
+    - str: The outcome of the action ("Hit" or "Miss").
+    """
+    global game_actions_log, start_time, SHIP_SYMBOLS
+    # Find the ship and its details at the given coordinates.
+    ship_name, ship_size, coordinates_list, coordinates_id = find_ship_and_coordinates(fleet, [x, y])
+    # Log and display the outcome.
+    try:
+        if ship_name:
+            print(f' {player} performed shot on coordinates {x} and {y}, {ship_name} was damaged')
+            # A ship was hit; proceed to update maps and logs.
+            handle_ship_hit(player, x, y, map_hidden, map_display, fleet, 
+                            ship_name, ship_size, coordinates_list, 
+                            coordinates_id)
+        else:
+            print(f' {player} performed shot on coordinates {x} and {y}, it was a MISS')
+            # No ship was hit; mark as a miss.
+            handle_miss(player, x, y, map_hidden, map_display)
+            return "Miss"
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+def handle_ship_hit(player, x, y, map_hidden, map_display, fleet, ship_name, ship_size, coordinates_list, coordinates_id):
+    print()
+    print("initializing function handle_ship_hit")
+    global game_actions_log, start_time, SHIP_SYMBOLS, cpu_shot_log_tmp
+    """
+    Handle the scenario where a ship is hit.
+    """
+    if player == "CPU":
+        cpu_shot_log_tmp.append([x, y])  # Adding hit coordinates to temporary CPU actions list
+        print(player, " actions log by tomosius: ", cpu_shot_log_tmp)
+    check_ship_damage(player, fleet, [x, y], map_display, map_hidden)  # Checking if ship was completely sunk
+    print(player, " made a hit, now we will update log based on coordinates_list: ", coordinates_list)
+    print(" coordinates list: ", coordinates_list)
+    # Log the action.
+    timer = time.time() - start_time
+    action_outcome = f'{ship_name} was hit'
+    game_actions_log.append([player, timer, x, y, action_outcome])
+    # Update the displayed map.
+    map_hidden[x][y] = SHIP_SYMBOLS["Hit"][0]
+    # Mark the hit on display map. it will be the same symbol, just a different color
+    update_display_map(ship_size, x, y, map_display, coordinates_list)
+    print("game_actions_log", game_actions_log)
+
+
+def handle_miss(player, x, y, map_hidden, map_display):
+    print()
+    print("initializing function handle_miss")
+    """
+    Handle the scenario where the shot is a miss.
+    """
+    global SHIP_SYMBOLS, start_time
+    # Log the action.
+    timer = time.time() - start_time
+    action_outcome = f'it was a MISS'
+    game_actions_log.append([player, timer, x, y, action_outcome])
+    map_hidden[x][y] = SHIP_SYMBOLS["Miss"][0]
+    map_display[x][y] = SHIP_SYMBOLS["Miss"][0]
+
+def update_display_map(ship_size, x, y, map_display, coordinates_list):
+    print()
+    print("initializing function update_display_map")
+    """
+    Update the displayed map based on the hit.
+    """
+    global SHIP_SYMBOLS
+    ship_alignment = str(detect_ship_alignment(coordinates_list)) + "Sunk"
+    print(" ship alignment is now: ", ship_alignment)
+    if ship_size == 1:
+        map_display[x][y] = SHIP_SYMBOLS[ship_alignment][0]
+    else:
+        # Find the symbol to use based on the hit location.
+        for coord_id, (x1, y1) in coordinates_list.items():
+            if x == x1 and y == y1:
+                if coord_id == 0:
+                    symbol_id = 0
+                else:
+                    symbol_id = 1
+        map_display[x][y] = SHIP_SYMBOLS[ship_alignment][symbol_id]
+
+
+
+
+
+def find_ship_and_coordinates(fleet, target_coordinates):
+    print()
+    print("Initializing function find_ship_and_coordinates")
+
+    """
+    Find the ship name, ship size, the list of coordinates, and the coordinate ID 
+    to which the target_coordinates belong.
+    
     Args:
         fleet (dict): Dictionary containing ship information.
-        coordinates (list): Coordinates to search for.
+        target_coordinates (list): Coordinates [x, y] to search for.
+        
     Returns:
-        A tuple containing the ship name, ship size, and coordinates list ID if found, otherwise (None, None, None).
+        tuple: A tuple containing:
+        - ship_name (str): Name of the ship at the coordinates, if found.
+        - ship_size (int): Size of the ship, if found.
+        - coordinates_list (list): List of coordinates of the ship, if found.
+        - coordinates_id (int): Index of the coordinates in the list, if found.
+        Returns (None, None, None, None) if no match is found.
     """
+    # Iterate through each ship in the fleet
     for ship_name, ship_info in fleet.items():
-        for list_id, coordinates_list in enumerate(ship_info['Coordinates']):
-            if coordinates in coordinates_list:
-                return ship_name, ship_info['Size'], list_id
-    # If coordinates are not found, return (None, None, None)
-    return None, None, None
+        
+        # Iterate through each list of coordinates for the ship
+        for coordinates_list in ship_info['Coordinates']:
+            
+            # Check if the target coordinates are in the list
+            if target_coordinates in coordinates_list:
+                
+                # Return the ship's details if a match is found
+                print("ship_name, ship_info['Size'], coordinates_list, None", ship_name, ship_info['Size'], coordinates_list)
+                return ship_name, ship_info['Size'], coordinates_list, None
+
+    # Return None for all fields if no match is found
+    print("ship_name, ship_info['Size'], coordinates_list, None", None, None, None, None)
+    return None, None, None, None
 
 
-def detect_ship_orientation(coordinates_list):
+
+
+def check_ship_damage(player, fleet, coordinates, map_display, map_hidden):
+    print()
+    print("initializing function check_ship_damage")
     """
-    Detect the orientation of a ship based on its coordinates.
-
+    Check if a ship is completely damaged (sunk) and updates the game state accordingly.
+    
     Args:
-        coordinates (list): List of coordinates to analyze.
+        player (str): The player who performed the action ("CPU" or "Human").
+        fleet (dict): The current fleet information.
+        ship_name (str): The name of the ship that was hit.
+        ship_size (int): The size of the ship.
+        alignment (str): The alignment of the ship ("Horizontal" or "Vertical").
+        coordinates_list (list): The list of coordinates of the ship.
+        coordinates_id (int): The ID of the ship's coordinates in the fleet.
+        map_hidden (list of lists): The hidden map representing the game state.
+    Returns:
+        str: "Game Over" if all ships are sunk, otherwise None.
+    """
+    # Global variables
+    global start_time, cpu_shot_log_tmp, SHIP_SYMBOLS, game_result
+    # Initialize ship_damaged as False
+    ship_sunk = False
+    alignment = detect_ship_alignment(coordinates)
+    ship_name, ship_size, coordinates_list, coordinates_list_id = find_ship_and_coordinates(fleet, coordinates)
+    # Check if all parts of the ship are damaged
+    for i in coordinates_list:
+        x, y = i  # Extract the X and Y coordinates
+        if map_hidden[x][y] == SHIP_SYMBOLS["Hit"][0]:
+            ship_sunk = True
+        else:
+            ship_sunk = False  # Set to False if any part is not damaged
+            break  # Exit the loop
+    # If the ship is completely damaged (sunk)
+    if ship_sunk:
+        # Update the hidden and visible maps
+        alignment = alignment + "Sunk"
+        map_show_ship_or_symbols(map_hidden, ship_size, coordinates_list[0], alignment, ship_name, fleet)
+        map_show_ship_or_symbols(map_display, ship_size, coordinates_list[0], alignment, ship_name, fleet)
+        # Record the action
+        timer = time.time() - start_time
+        action_outcome = f'{ship_name} was sunk'
+        game_actions_log.append([player, timer, x, y, action_outcome])
+        # remove ship coordinated from CU action log TMP
+        cpu_shot_log_tmp = update_cpu_shot_log_tmp(coordinates_list)
+        # Update the fleet information
+        del fleet[ship_name]["Coordinates"][coordinates_list_id]
+        fleet[ship_name]["Quantity"] -= 1
+        # Remove the ship from the fleet if it has no more coordinates
+        if not fleet[ship_name]["Coordinates"]:
+            del fleet[ship_name]
+        # Check if the game is over
+        if not fleet:
+            timer = time.time() - start_time
+            action_outcome = 'Game Over'
+            game_actions_log.append([player, timer, x, y, action_outcome])
+            game_result = "Game Over"
+
+        
+
+
+def update_cpu_shot_log_tmp(coordinates_list):
+    print()
+    print("initializing function update_cpu_shot_log_tmp")
+    global cpu_shot_log_tmp
+    """
+    Update the CPU shot log by removing coordinates that are present in
+    the provided coordinates_list, implying that a ship has been sunk.
+    
+    Parameters:
+    - coordinates_list (list): A list of coordinates that are to be removed.
+    - cpu_shot_log_tmp (list): The existing CPU shot log to be updated.
 
     Returns:
-        "horizontal" if the ship is positioned horizontally, "vertical" if vertically, or "unknown" if undetermined.
+    - list: Updated CPU shot log.
     """
-    # Check if all y-coordinates are the same (horizontal)
-    y_values = [coord[1] for coord in coordinates_list]
-    if all(y == y_values[0] for y in y_values):
-        return "horizontal"
+    # Initialize an empty list to store the updated shot log.
+    updated_log = []
+    print()
+    print(" update_cpu_shot_log_tmp")
+    print("coordinates list: ", coordinates_list)
+    try:
+        # Iterate through each coordinate in the CPU shot log.
+        for coord_in_log in cpu_shot_log_tmp:
+            
+            # Use a flag to indicate whether the coordinate is found
+            # in the coordinates_list.
+            is_in_coordinates_list = False
+            print(is_in_coordinates_list)
+            # Iterate through each coordinate in the provided list.
+            for coord_to_remove in coordinates_list:
+                print(coord_to_remove)
+                # If a match is found, set the flag to True.
+                if coord_in_log == coord_to_remove:
+                    is_in_coordinates_list = True
+                    break
+            
+            # If the coordinate is not in coordinates_list, add it to the updated log.
+            if not is_in_coordinates_list:
+                updated_log.append(coord_in_log)
+                print(" cord in log:", coord_in_log)
+                print("updated log: ", updated_log)
+        
+        # Replace the original CPU shot log with the updated version.
+        cpu_shot_log_tmp = updated_log
+        print("cpu_shot_log_tmp", cpu_shot_log_tmp)
 
-    # Check if all x-coordinates are the same (vertical)
-    x_values = [coord[0] for coord in coordinates_list]
-    if all(x == x_values[0] for x in x_values):
-        return "vertical"
-
-    # If neither condition is met, it's undetermined
-    return "unknown"
-
-
-
-
-clear_terminal()
-cpu_deploy_all_ships()
-print_two_maps(map_cpu_hidden, map_cpu,"hidfdwfwefwdden","actuawefweewfl")
-#print_two_maps(map_cpu, map_cpu_hidden,"hidden","actual")
-
-print("learning")
-def test():
-    global fleet_cpu, map_cpu_hidden
-    ship_name, ship_size = find_biggest_ship_in_fleet(fleet_cpu) # searching for biggest ship in fleet
-    coordinates = search_map_for_pattern(map_cpu_hidden, ship_size, ship_size) # getting list of possible coordinates
-    tomasx, tomasy = cpu_choose_shooting_coordinates_biggest_ship(fleet_cpu, map_cpu_hidden)
-    print(ship_name, ship_size)
-    print (tomasx, tomasy)
-
-#test()
-print("finished")
-print(fleet_cpu)
-
-
-
-
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    
+    return cpu_shot_log_tmp
 
 
 
+def detect_ship_alignment(coordinates_list):
+    print()
+    print("initializing function detect_ship_alignment")
+    """
+    Detect the alignment of a ship based on its coordinates.
+    
+    Args:
+        coordinates_list (list): List of coordinates to analyze. Each coordinate is a tuple (x, y).
+        
+    Returns:
+        str: "Horizontal" if the ship is positioned horizontally, 
+             "Vertical" if vertically, 
+             "Single" if it has only one coordinate,
+             or "Unknown" if undetermined.
+    """
+    # Handle the case when only one coordinate is present
+    if len(coordinates_list) == 1:
+        print("Single Ship Detected")
+        return "Single"
+    try:
+        # Initialize empty lists for y-coordinates and x-coordinates
+        y_values = []
+        x_values = []
+        # Extract y-coordinates from the list
+        for coord in coordinates_list:
+            y_values.append(coord[1])
+        # Check for horizontal alignment: all y-values should be the same
+        is_horizontal = True
+        for y in y_values:
+            if y != y_values[0]:
+                is_horizontal = False
+                break
+        if is_horizontal:
+            print("Horizontal Ship Detected")
+            return "Horizontal"
+        # Extract x-coordinates from the list
+        for coord in coordinates_list:
+            x_values.append(coord[0])
+        # Check for vertical alignment: all x-values should be the same
+        is_vertical = True
+        for x in x_values:
+            if x != x_values[0]:
+                is_vertical = False
+                break
+        if is_vertical:
+            print("Vertical Ship Detected")
+            return "Vertical"
+    except TypeError:
+        # Handle the error gracefully and print a debug message
+        print(f"TypeError: coordinates_list contains an unsupported data type. Received: {coordinates_list}")
+        return "Unknown"
+    
+    # If none of the above conditions are met, the alignment is unknown
+    print("Unknown Ship Alignment")
+    return "Unknown"
+
+
+
+
+
+def cpu_continue_killing_ship(map_to_search):
+    print()
+    print("initalizing function cpu_continue_killing_ship")
+    """
+    Chooses coordinates to shoot at based on ship alignment detection.
+    Args:
+        map_to_search (list of lists): The map to search for ship coordinates.
+        DEFAULT_SYMBOL (str): The default symbol representing untargeted cells in the map.
+    Returns:
+        tuple: The chosen coordinates (x, y).
+    """
+    # Making cpu_shot_log_tmp global as it's accessed within the function
+    global cpu_shot_log_tmp, DEFAULT_SYMBOL
+    # Initialize variables to hold the selected coordinates
+    x, y = None, None
+    # Detect the alignment of the ship using the cpu_shot_log_tmp
+    alignment = detect_ship_alignment(cpu_shot_log_tmp)
+    # Define the map boundaries
+    max_x = len(map_to_search[0]) - 1
+    max_y = len(map_to_search) - 1
+    # Initialize an empty list to hold adjacent coordinates
+    adjacent_coordinates = []
+    # Loop through the shot log to find adjacent coordinates
+    for coord in cpu_shot_log_tmp:
+        x, y = coord
+        # Check for Horizontal alignment and append coordinates
+        if alignment == "Horizontal":
+            if x + 1 <= max_x and map_to_search[x + 1][y] == DEFAULT_SYMBOL:
+                adjacent_coordinates.append((x + 1, y))
+            if x - 1 >= 0 and map_to_search[x - 1][y] == DEFAULT_SYMBOL:
+                adjacent_coordinates.append((x - 1, y))
+        # Check for Vertical alignment and append coordinates
+        elif alignment == "Vertical":
+            if y + 1 <= max_y and map_to_search[x][y + 1] == DEFAULT_SYMBOL:
+                adjacent_coordinates.append((x, y + 1))
+            if y - 1 >= 0 and map_to_search[x][y - 1] == DEFAULT_SYMBOL:
+                adjacent_coordinates.append((x, y - 1))
+        # Check for Unknown or Single alignment and append coordinates
+        else:
+            if x + 1 <= max_x and map_to_search[x + 1][y] == DEFAULT_SYMBOL:
+                adjacent_coordinates.append((x + 1, y))
+            if x - 1 >= 0 and map_to_search[x - 1][y] == DEFAULT_SYMBOL:
+                adjacent_coordinates.append((x - 1, y))
+            if y + 1 <= max_y and map_to_search[x][y + 1] == DEFAULT_SYMBOL:
+                adjacent_coordinates.append((x, y + 1))
+            if y - 1 >= 0 and map_to_search[x][y - 1] == DEFAULT_SYMBOL:
+                adjacent_coordinates.append((x, y - 1))
+    # Randomly choose one of the adjacent coordinates if any are available
+    if adjacent_coordinates:
+        x, y = random.choice(adjacent_coordinates)
+    print("x, y", x, y)
+    return x, y  # Return the selected x and y coordinates
+
+
+
+
+
+
+def cpu_move():
+    global game_result, fleet_cpu, map_cpu_hidden, map_cpu_display , cpu_shot_log_tmp, game_actions_log, start_time, SHIP_SYMBOLS# change to player fleet and player hidden map
+    # check if there is any damaged and un-sunk ships in cpu_shot_log_tmp
+    player = "CPU"
+    if len(cpu_shot_log_tmp) == 0:
+        # there is no damaged ships
+        x, y = cpu_choose_shooting_coordinates_biggest_ship(fleet_cpu, map_player_hidden) # choosing coordinates to shot
+        action_perform_shoot(player, x, y, map_cpu_hidden, map_cpu_display, fleet_cpu)
+        if game_result == "Game Over":
+            print ("CPU HAS WON")
+    else:
+        x, y = cpu_continue_killing_ship(map_cpu_hidden)
+        action_perform_shoot(player, x, y, map_cpu_hidden, map_cpu_display, fleet_cpu) # shooting and getting result Hit or Miss
+        if game_result == "Game Over":
+            print ("CPU HAS WON")
+
+
+
+
+
+
+def battleship_game ():
+    global start_time
+    start_time = time.time() # starting timer
+    clear_terminal()
+    cpu_deploy_all_ships()
+    print_two_maps(map_cpu_hidden, map_cpu_display,"hidden_cpu_map","cpu_map")
+    print_fleet(fleet_cpu)
+    for i in range(10):
+        cpu_move()
+        print(game_actions_log)
+        print_two_maps(map_cpu_hidden, map_cpu_display,"hidden_cpu_map","cpu_map")
+
+
+
+
+
+battleship_game()
+print(" test done")
+print("all shooting actions: ", game_actions_log)
